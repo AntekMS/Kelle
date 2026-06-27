@@ -1,48 +1,128 @@
-import type { Dish, UserProfile } from '../../types';
+import type { Dish, Goal, Ingredient, UserProfile } from '../../types';
 
-// Scoring weights — all multipliers stay in [0.7, 1.0] so the ranking stays subtle
+// ── Machbarkeit ────────────────────────────────────────────────────────────
+// Based on whether technique_taught is new for this user.
+// 0 new = 0.8 (comfortable, no growth), 1 new = 1.0 (sweet spot), 2 = 0.4, 3+ = 0.1
+
+const MACHBARKEIT_TABLE = [0.8, 1.0, 0.4, 0.1] as const;
+
+function scoreMachbarkeit(dish: Dish, profile: UserProfile): number {
+  const isNew = !profile.skill_techniques.includes(dish.technique_taught);
+  const newCount = isNew ? 1 : 0;
+  return MACHBARKEIT_TABLE[Math.min(newCount, 3)];
+}
+
+// ── Nährwerte pro Portion ──────────────────────────────────────────────────
+// Needed for ziel_fit. Sums ingredient nutrients weighted by amount.
+
+interface NutritionPerServing {
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+}
+
+function computeNutritionPerServing(
+  dish: Dish,
+  ingredientMap: Map<string, Ingredient>
+): NutritionPerServing {
+  let kcal = 0;
+  let protein_g = 0;
+  let carbs_g = 0;
+
+  for (const di of dish.ingredients) {
+    const ing = ingredientMap.get(di.ingredient_id);
+    if (!ing) continue;
+
+    // Normalize to base_unit amount
+    const conversionFactor = ing.unit_conversions[di.unit] ?? (di.unit === 'g' || di.unit === 'ml' ? 1 : null);
+    if (conversionFactor === null) continue;
+
+    const amountInBaseUnit = di.amount * conversionFactor;
+    const factor = amountInBaseUnit / 100;
+
+    kcal += ing.nutrients_per_100g.kcal * factor;
+    protein_g += ing.nutrients_per_100g.protein_g * factor;
+    carbs_g += ing.nutrients_per_100g.carbs_g * factor;
+  }
+
+  const servings = dish.serving_base > 0 ? dish.serving_base : 1;
+  return {
+    kcal: kcal / servings,
+    protein_g: protein_g / servings,
+    carbs_g: carbs_g / servings,
+  };
+}
+
+// ── Ziel-Fit ───────────────────────────────────────────────────────────────
+// Compressed to [0.7..1.0] — goal influences ranking subtly, never buries dishes
+
+function scoreZielFit(
+  dish: Dish,
+  goals: Goal[],
+  ingredientMap: Map<string, Ingredient>
+): number {
+  if (goals.length === 0 || goals.every((g) => g === 'none')) return 1.0;
+
+  const nutrition = computeNutritionPerServing(dish, ingredientMap);
+  let fit = 1.0;
+
+  for (const goal of goals) {
+    if (goal === 'none') continue;
+
+    if (goal === 'high_protein') {
+      // protein density: protein_g / kcal — higher is better
+      const density = nutrition.kcal > 0 ? nutrition.protein_g / nutrition.kcal : 0;
+      // 0.05 g/kcal = good (chicken breast ~0.08); compress to [0.7, 1.0]
+      fit = Math.min(fit, 0.7 + Math.min(density / 0.05, 1.0) * 0.3);
+    }
+
+    if (goal === 'low_carb') {
+      // carbs_g / kcal — lower is better
+      const ratio = nutrition.kcal > 0 ? nutrition.carbs_g / nutrition.kcal : 1;
+      // invert: ratio close to 0 = score 1.0
+      fit = Math.min(fit, 0.7 + Math.max(0, 1 - ratio / 0.5) * 0.3);
+    }
+
+    if (goal === 'lighter') {
+      // kcal per serving — lower is better; 400 kcal = target
+      const lightness = Math.max(0, 1 - nutrition.kcal / 800);
+      fit = Math.min(fit, 0.7 + lightness * 0.3);
+    }
+  }
+
+  return Math.max(0.7, Math.min(1.0, fit));
+}
+
+// ── Strafe Wiederholung ────────────────────────────────────────────────────
+
 const W_ALREADY_COOKED = 0.7;
-const W_DIFFICULTY_MISMATCH = 0.8;
-const W_DIET_MATCH = 1.0; // neutral — filter handles hard blocks
 
-/**
- * Returns a score [0, 1] for a dish relative to a user profile.
- * Higher = more relevant. The allergen hard-gate runs BEFORE this — only
- * safe dishes reach scoring.
- */
-export function scoreDish(dish: Dish, profile: UserProfile): number {
-  let score = 1.0;
-
-  // Soft penalty: already cooked dishes are still shown, just ranked lower
-  if (profile.cooked_dish_ids.includes(dish.id)) {
-    score *= W_ALREADY_COOKED;
-  }
-
-  // Soft penalty: difficulty jump >1 from current average
-  const avgDifficulty = estimateUserLevel(profile);
-  if (dish.difficulty - avgDifficulty > 1) {
-    score *= W_DIFFICULTY_MISMATCH;
-  }
-
-  return score;
+function penaltyRepetition(dish: Dish, profile: UserProfile): number {
+  return profile.cooked_dish_ids.includes(dish.id) ? W_ALREADY_COOKED : 1.0;
 }
 
-/**
- * Estimates the user's current cooking level from cooked history.
- * Returns difficulty 1–3; defaults to 1 for new users.
- */
-function estimateUserLevel(profile: UserProfile): number {
-  if (profile.cooked_dish_ids.length === 0) return 1;
-  // Simple proxy: number of cooked dishes drives level up, capped at 3
-  return Math.min(3, 1 + Math.floor(profile.cooked_dish_ids.length / 5));
+// ── Final Score ────────────────────────────────────────────────────────────
+
+export function scoreDish(
+  dish: Dish,
+  profile: UserProfile,
+  ingredientMap: Map<string, Ingredient>
+): number {
+  const machbarkeit = scoreMachbarkeit(dish, profile);
+  const zielFit = scoreZielFit(dish, profile.goals, ingredientMap);
+  const repetition = penaltyRepetition(dish, profile);
+
+  // Spec formula: ziel_fit × machbarkeit − strafe_wiederholung (applied as multiplier)
+  return zielFit * machbarkeit * repetition;
 }
 
-/**
- * Returns dishes sorted by score descending, allergen-safe dishes only.
- * Safe dishes must be passed in — caller runs allergen filter first.
- */
-export function rankDishes(safeDishes: Dish[], profile: UserProfile): Dish[] {
+export function rankDishes(
+  safeDishes: Dish[],
+  profile: UserProfile,
+  ingredients: Ingredient[] = []
+): Dish[] {
+  const ingredientMap = new Map(ingredients.map((i) => [i.id, i]));
   return [...safeDishes].sort(
-    (a, b) => scoreDish(b, profile) - scoreDish(a, profile)
+    (a, b) => scoreDish(b, profile, ingredientMap) - scoreDish(a, profile, ingredientMap)
   );
 }

@@ -15,11 +15,13 @@ export async function initDatabase(): Promise<void> {
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS dishes (
       id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
+      data TEXT NOT NULL,
+      updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS ingredients (
       id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
+      data TEXT NOT NULL,
+      updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS cooked_history (
       dish_id TEXT NOT NULL,
@@ -33,9 +35,10 @@ export async function seedDishes(dishes: Dish[]): Promise<void> {
   await database.withTransactionAsync(async () => {
     for (const dish of dishes) {
       await database.runAsync(
-        'INSERT OR REPLACE INTO dishes (id, data) VALUES (?, ?)',
+        'INSERT OR REPLACE INTO dishes (id, data, updated_at) VALUES (?, ?, ?)',
         dish.id,
-        JSON.stringify(dish)
+        JSON.stringify(dish),
+        new Date().toISOString()
       );
     }
   });
@@ -46,9 +49,10 @@ export async function seedIngredients(ingredients: Ingredient[]): Promise<void> 
   await database.withTransactionAsync(async () => {
     for (const ingredient of ingredients) {
       await database.runAsync(
-        'INSERT OR REPLACE INTO ingredients (id, data) VALUES (?, ?)',
+        'INSERT OR REPLACE INTO ingredients (id, data, updated_at) VALUES (?, ?, ?)',
         ingredient.id,
-        JSON.stringify(ingredient)
+        JSON.stringify(ingredient),
+        new Date().toISOString()
       );
     }
   });
@@ -58,6 +62,12 @@ export async function getAllDishes(): Promise<Dish[]> {
   const database = getDb();
   const rows = await database.getAllAsync<{ data: string }>('SELECT data FROM dishes');
   return rows.map((row) => JSON.parse(row.data) as Dish);
+}
+
+export async function getAllIngredients(): Promise<Ingredient[]> {
+  const database = getDb();
+  const rows = await database.getAllAsync<{ data: string }>('SELECT data FROM ingredients');
+  return rows.map((row) => JSON.parse(row.data) as Ingredient);
 }
 
 export async function getDishById(id: string): Promise<Dish | null> {

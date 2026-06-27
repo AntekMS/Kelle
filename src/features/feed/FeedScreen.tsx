@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Dish, UserProfile } from '../../types';
+import type { Dish, Ingredient, UserProfile } from '../../types';
 import { DISHES } from '../../data/dishes';
 import { INGREDIENTS } from '../../data/ingredients';
 import {
@@ -16,17 +16,25 @@ import {
   seedDishes,
   seedIngredients,
   getAllDishes,
+  getAllIngredients,
   markDishCooked,
 } from '../../db/database';
+import { fetchDishesFromCloud, fetchIngredientsFromCloud } from '../../db/cloud-catalog';
 import { loadProfile, saveProfile } from '../../store/profile-store';
-import { filterSafeDishes } from '../filter/allergen-filter';
+import { filterCompatibleDishes } from '../filter/allergen-filter';
 import { rankDishes } from './scoring';
 import DishCard from '../../components/DishCard';
 
 type FeedState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; safeDishes: Dish[]; rankedDishes: Dish[]; profile: UserProfile };
+  | {
+      status: 'ready';
+      safeDishes: Dish[];
+      rankedDishes: Dish[];
+      ingredients: Ingredient[];
+      profile: UserProfile;
+    };
 
 export default function FeedScreen() {
   const [state, setState] = useState<FeedState>({ status: 'loading' });
@@ -36,13 +44,30 @@ export default function FeedScreen() {
     setState({ status: 'loading' });
     try {
       await initDatabase();
+
+      // Fetch from Supabase cloud catalog; fall back to bundled data if unavailable
+      let cloudDishes: Dish[] = [];
+      let cloudIngredients: Ingredient[] = [];
+      try {
+        [cloudDishes, cloudIngredients] = await Promise.all([
+          fetchDishesFromCloud(),
+          fetchIngredientsFromCloud(),
+        ]);
+      } catch {
+        // Supabase unreachable — use bundled seed data
+      }
+
+      const dishesToSeed = cloudDishes.length > 0 ? cloudDishes : DISHES;
+      const ingredientsToSeed = cloudIngredients.length > 0 ? cloudIngredients : INGREDIENTS;
+
       await Promise.all([
-        seedDishes(DISHES),
-        seedIngredients(INGREDIENTS),
+        seedDishes(dishesToSeed),
+        seedIngredients(ingredientsToSeed),
       ]);
 
-      const [allDishes, profile] = await Promise.all([
+      const [allDishes, allIngredients, profile] = await Promise.all([
         getAllDishes(),
+        getAllIngredients(),
         loadProfile(),
       ]);
 
@@ -51,11 +76,11 @@ export default function FeedScreen() {
         return;
       }
 
-      // Allergen hard gate ALWAYS runs before soft scoring
-      const safeDishes = filterSafeDishes(allDishes, profile);
-      const rankedDishes = rankDishes(safeDishes, profile);
+      // Hard gate ALWAYS first — allergen, diet, equipment, time
+      const safeDishes = filterCompatibleDishes(allDishes, profile);
+      const rankedDishes = rankDishes(safeDishes, profile, allIngredients);
 
-      setState({ status: 'ready', safeDishes, rankedDishes, profile });
+      setState({ status: 'ready', safeDishes, rankedDishes, ingredients: allIngredients, profile });
     } catch (err) {
       setState({
         status: 'error',
@@ -70,7 +95,7 @@ export default function FeedScreen() {
 
   async function handleMarkCooked(dishId: string) {
     if (state.status !== 'ready') return;
-    const { safeDishes, profile } = state;
+    const { safeDishes, ingredients, profile } = state;
 
     await markDishCooked(dishId);
 
@@ -81,8 +106,8 @@ export default function FeedScreen() {
     };
     await saveProfile(updated);
 
-    // Re-rank in memory — allergen filter result unchanged
-    const rankedDishes = rankDishes(safeDishes, updated);
+    // Re-rank in memory — filter result unchanged
+    const rankedDishes = rankDishes(safeDishes, updated, ingredients);
     setState({ ...state, rankedDishes, profile: updated });
   }
 
@@ -111,10 +136,7 @@ export default function FeedScreen() {
     <FlatList
       data={rankedDishes}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={[
-        styles.list,
-        { paddingBottom: insets.bottom + 24 },
-      ]}
+      contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
       renderItem={({ item }) => (
         <DishCard
           dish={item}
@@ -126,7 +148,7 @@ export default function FeedScreen() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Keine Gerichte verfügbar.</Text>
           <Text style={styles.emptySubtitle}>
-            Alle Gerichte wurden aufgrund deiner Allergie-Einstellungen gefiltert.
+            Alle Gerichte wurden aufgrund deiner Einstellungen gefiltert.
           </Text>
         </View>
       }
@@ -135,49 +157,15 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#7A2C2C',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  errorText: { fontSize: 16, color: '#7A2C2C', textAlign: 'center', marginBottom: 16 },
   retryButton: {
-    backgroundColor: '#2D6A4F',
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    backgroundColor: '#2D6A4F', borderRadius: 10,
+    paddingHorizontal: 24, paddingVertical: 12,
   },
-  retryText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  list: {
-    padding: 16,
-    backgroundColor: '#F9FAF8',
-  },
-  empty: {
-    marginTop: 80,
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#3A4E3A',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#6B7F6B',
-    textAlign: 'center',
-    lineHeight: 21,
-  },
+  retryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  list: { padding: 16, backgroundColor: '#F9FAF8' },
+  empty: { marginTop: 80, alignItems: 'center', gap: 12, paddingHorizontal: 32 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#3A4E3A', textAlign: 'center' },
+  emptySubtitle: { fontSize: 14, color: '#6B7F6B', textAlign: 'center', lineHeight: 21 },
 });

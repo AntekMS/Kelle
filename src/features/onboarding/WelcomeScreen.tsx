@@ -24,7 +24,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
       <Pressable
         style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-        onPress={() => navigation.navigate('AllergenSetup')}
+        onPress={() => navigation.navigate('Ziel')}
       >
         <Text style={styles.ctaText}>Jetzt starten</Text>
       </Pressable>

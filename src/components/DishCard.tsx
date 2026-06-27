@@ -20,14 +20,17 @@ export default function DishCard({ dish, isCooked, onMarkCooked }: DishCardProps
       </Text>
 
       <View style={styles.meta}>
-        <DifficultyDots level={dish.difficulty} />
-        <Text style={styles.metaText}>· {dish.time_minutes} Min.</Text>
-        {dish.diet_tags.includes('vegan') && (
-          <Text style={styles.tag}>🌱 Vegan</Text>
+        <Text style={styles.metaText}>⏱ {dish.time_minutes} Min.</Text>
+        {dish.technique_taught && (
+          <Text style={styles.techniqueTag}>✦ {dish.technique_taught}</Text>
         )}
-        {!dish.diet_tags.includes('vegan') && dish.diet_tags.includes('vegetarian') && (
-          <Text style={styles.tag}>🥦 Vegetarisch</Text>
+        {dish.diet_verified.includes('vegan') && (
+          <Text style={styles.dietTag}>🌱 Vegan</Text>
         )}
+        {!dish.diet_verified.includes('vegan') &&
+          dish.diet_verified.includes('vegetarian') && (
+            <Text style={styles.dietTag}>🥦 Vegetarisch</Text>
+          )}
       </View>
 
       <Pressable
@@ -42,19 +45,6 @@ export default function DishCard({ dish, isCooked, onMarkCooked }: DishCardProps
           {isCooked ? 'Bereits gekocht' : 'Als gekocht markieren'}
         </Text>
       </Pressable>
-    </View>
-  );
-}
-
-function DifficultyDots({ level }: { level: 1 | 2 | 3 }) {
-  return (
-    <View style={styles.dots}>
-      {[1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={[styles.dot, i <= level && styles.dotFilled]}
-        />
-      ))}
     </View>
   );
 }
@@ -78,49 +68,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  name: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A2E1A',
-    flex: 1,
-  },
-  cookedBadge: {
-    fontSize: 13,
-    color: '#2D6A4F',
-    fontWeight: '600',
-  },
-  description: {
-    fontSize: 14,
-    color: '#4A5E4A',
-    lineHeight: 20,
-  },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaText: {
-    fontSize: 14,
-    color: '#6B7F6B',
-  },
-  tag: {
-    fontSize: 13,
-    color: '#4A5E4A',
-    marginLeft: 4,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D0E4D4',
-  },
-  dotFilled: {
-    backgroundColor: '#2D6A4F',
-  },
+  name: { fontSize: 18, fontWeight: '700', color: '#1A2E1A', flex: 1 },
+  cookedBadge: { fontSize: 13, color: '#2D6A4F', fontWeight: '600' },
+  description: { fontSize: 14, color: '#4A5E4A', lineHeight: 20 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  metaText: { fontSize: 14, color: '#6B7F6B' },
+  techniqueTag: { fontSize: 13, color: '#2D6A4F', fontWeight: '500' },
+  dietTag: { fontSize: 13, color: '#4A5E4A' },
   button: {
     backgroundColor: '#EDF5EF',
     borderRadius: 10,
@@ -128,15 +82,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  buttonDisabled: {
-    backgroundColor: '#F3F7F3',
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2D6A4F',
-  },
-  buttonTextDisabled: {
-    color: '#A8C4AF',
-  },
+  buttonDisabled: { backgroundColor: '#F3F7F3' },
+  buttonText: { fontSize: 14, fontWeight: '600', color: '#2D6A4F' },
+  buttonTextDisabled: { color: '#A8C4AF' },
 });

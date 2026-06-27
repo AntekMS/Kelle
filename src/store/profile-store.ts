@@ -20,5 +20,5 @@ export async function deleteProfile(): Promise<void> {
 
 export async function hasGrantedConsent(): Promise<boolean> {
   const profile = await loadProfile();
-  return profile?.consent.granted === true;
+  return typeof profile?.consent.granted_at === 'string' && profile.consent.granted_at.length > 0;
 }

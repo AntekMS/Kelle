@@ -1,13 +1,11 @@
-import type { Allergen, DietaryPreference, ReligiousRestriction } from '../types';
-
 export type OnboardingStackParamList = {
   Welcome: undefined;
-  AllergenSetup: undefined;
-  ConsentScreen: {
-    allergies: Allergen[];
-    diet: DietaryPreference;
-    religious_restriction: ReligiousRestriction;
-  };
+  Ziel: undefined;
+  Kueche: undefined;
+  Zeit: undefined;
+  Koennen: undefined;
+  ErnährungAllergien: undefined;
+  ConsentScreen: undefined;
 };
 
 export type MainStackParamList = {

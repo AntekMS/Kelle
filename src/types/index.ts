@@ -16,24 +16,38 @@ export const EU14_ALLERGENS = [
   'molluscs',
 ] as const;
 
-export type Allergen = typeof EU14_ALLERGENS[number];
+export type Allergen = (typeof EU14_ALLERGENS)[number];
 
-export type DietaryPreference =
+// Art. 9 DSGVO: halal and kosher are religious data — consent covers all DietOption values
+export type DietOption =
+  | 'omnivore'
   | 'vegetarian'
   | 'vegan'
-  | 'pescatarian'
-  | 'omnivore';
+  | 'halal'
+  | 'kosher';
 
-// Art. 9 DSGVO — religious dietary restrictions
-export type ReligiousRestriction = 'halal' | 'kosher' | 'none';
+export type Goal = 'high_protein' | 'low_carb' | 'lighter' | 'none';
 
+export const EQUIPMENT_OPTIONS = [
+  'herdplatte',
+  'ofen',
+  'mikrowelle',
+  'airfryer',
+  'wasserkocher',
+  'mixer',
+  'puerierstab',
+  'toaster',
+] as const;
+
+export type Equipment = (typeof EQUIPMENT_OPTIONS)[number];
+
+// Nutrient values per 100g of the ingredient in its reference state (raw or cooked — consistent per ingredient)
 export interface NutrientsPer100g {
-  energy_kcal: number;
+  kcal: number;
   protein_g: number;
   fat_g: number;
-  carbohydrates_g: number;
+  carbs_g: number;
   fiber_g: number;
-  salt_g: number;
 }
 
 export interface Ingredient {
@@ -41,50 +55,58 @@ export interface Ingredient {
   name: string;
   allergens: Allergen[];
   nutrients_per_100g: NutrientsPer100g;
-  // Reference unit for normalization
   base_unit: 'g' | 'ml';
-  // Conversion: e.g. "1 Zwiebel" → 110g
+  // Maps unit names to base_unit amounts: e.g. { 'stueck': 110, 'el': 15 }
   unit_conversions: Record<string, number>;
   aisle_category: string;
+  is_pantry_staple: boolean;
+  animal_origin: 'none' | 'dairy' | 'egg' | 'meat' | 'fish';
 }
 
-export type DishState = 'raw' | 'cooked';
+export type DishUnit = 'g' | 'ml' | 'stueck' | 'el' | 'tl';
 
 export interface DishIngredient {
   ingredient_id: string;
-  amount_g: number;
-  state: DishState;
+  amount: number;
+  unit: DishUnit;
 }
 
 export interface Dish {
   id: string;
+  variant_group?: string;
   name: string;
   description: string;
-  techniques: string[];
+  serving_base: number;
+  techniques_required: string[];
+  technique_taught: string;        // the ONE new skill this dish introduces
+  // diet_verified is hand-authored — halal cannot be derived from ingredients
+  diet_verified: string[];
+  equipment_required: string[][];  // AND of OR-groups: [['ofen','airfryer'], ['herdplatte']]
+  equipment_optional: string[];
   ingredients: DishIngredient[];
-  // Computed from ingredients — never set manually
-  allergens: Allergen[];
-  difficulty: 1 | 2 | 3;
+  allergens: Allergen[];           // computed from ingredients, stored for fast lookup
   time_minutes: number;
+  steps: string[];
   image_asset: string;
-  diet_tags: DietaryPreference[];
 }
 
 export interface UserConsent {
-  timestamp: string; // ISO 8601
+  granted_at: string;   // ISO 8601
   policy_version: string;
-  granted: boolean;
 }
 
-// Art. 9 DSGVO — sensitive data, stays on device only
+// Art. 9 DSGVO — all fields stay on device only (SecureStore)
 export interface UserProfile {
   id: string;
   consent: UserConsent;
+  diet: DietOption;
   allergies: Allergen[];
-  diet: DietaryPreference;
-  religious_restriction: ReligiousRestriction;
-  // Dishes the user has cooked
+  goals: Goal[];
+  equipment: string[];
+  time_budget_min: number;
+  skill_techniques: string[];
   cooked_dish_ids: string[];
+  favorites: string[];
   created_at: string;
   updated_at: string;
 }
