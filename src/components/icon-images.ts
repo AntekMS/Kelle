@@ -10,6 +10,10 @@ const ICON_IMAGES: Record<string, ImageSourcePropType> = {
   heart_filled:    require('../../assets/icons/icon_heart_filled.png'),
   heart_outline:   require('../../assets/icons/icon_heart_outline.png'),
 
+  // Navigation
+  // TODO: ersetzen durch assets/icons/icon_settings.png wenn verfügbar
+  settings:        require('../../assets/icons/icon_technique.png'),
+
   // Metadaten auf Gericht-Cards
   time:            require('../../assets/icons/icon_time.png'),
   technique:       require('../../assets/icons/icon_technique.png'),

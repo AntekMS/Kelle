@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   heroImage: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: 180,
   },
   content: {
     padding: 18,

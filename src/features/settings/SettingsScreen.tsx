@@ -1,12 +1,13 @@
 import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { MainStackParamList } from '../../navigation/types';
+import type { SettingsStackParamList } from '../../navigation/types';
 import { loadProfile, deleteProfile } from '../../store/profile-store';
 import { useAppContext } from '../../navigation/AppContext';
+import { CURRENT_POLICY_VERSION } from '../../lib/policy';
 import { colors } from '../../theme/colors';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Settings'>;
+type Props = NativeStackScreenProps<SettingsStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -50,7 +51,7 @@ export default function SettingsScreen({ navigation }: Props) {
     >
       <Text style={styles.sectionHeader}>DSGVO-Betroffenenrechte</Text>
       <View style={styles.card}>
-        <Pressable style={styles.row} onPress={handleExport}>
+        <Pressable style={styles.row} onPress={handleExport} accessibilityLabel="Profildaten als JSON exportieren">
           <View style={styles.rowContent}>
             <Text style={styles.rowTitle}>Daten einsehen</Text>
             <Text style={styles.rowSub}>Profil als Text anzeigen (Art. 15 DSGVO)</Text>
@@ -60,7 +61,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.divider} />
 
-        <Pressable style={styles.row} onPress={handleDeletePress}>
+        <Pressable style={styles.row} onPress={handleDeletePress} accessibilityLabel="Profil und alle gespeicherten Daten löschen">
           <View style={styles.rowContent}>
             <Text style={[styles.rowTitle, styles.danger]}>Profil löschen</Text>
             <Text style={styles.rowSub}>Einwilligung widerrufen, alle Daten entfernen</Text>
@@ -71,7 +72,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
       <Text style={styles.sectionHeader}>Rechtliches</Text>
       <View style={styles.card}>
-        <Pressable style={styles.row} onPress={() => navigation.navigate('Datenschutz')}>
+        <Pressable style={styles.row} onPress={() => navigation.navigate('Datenschutz')} accessibilityLabel="Datenschutzerklärung öffnen">
           <View style={styles.rowContent}>
             <Text style={styles.rowTitle}>Datenschutzerklärung</Text>
           </View>
@@ -80,7 +81,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.divider} />
 
-        <Pressable style={styles.row} onPress={() => navigation.navigate('Impressum')}>
+        <Pressable style={styles.row} onPress={() => navigation.navigate('Impressum')} accessibilityLabel="Impressum öffnen">
           <View style={styles.rowContent}>
             <Text style={styles.rowTitle}>Impressum</Text>
           </View>
@@ -88,7 +89,7 @@ export default function SettingsScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      <Text style={styles.versionText}>Kelle · Policy 1.0</Text>
+      <Text style={styles.versionText}>Kelle · Policy {CURRENT_POLICY_VERSION}</Text>
     </ScrollView>
   );
 }

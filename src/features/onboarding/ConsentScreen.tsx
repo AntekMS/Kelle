@@ -9,6 +9,7 @@ import type { UserProfile } from '../../types';
 import { saveProfile } from '../../store/profile-store';
 import { useAppContext } from '../../navigation/AppContext';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { CURRENT_POLICY_VERSION } from '../../lib/policy';
 import { colors } from '../../theme/colors';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ConsentScreen'>;
@@ -30,7 +31,7 @@ export default function ConsentScreen(_props: Props) {
         id: `user-${Date.now()}`,
         consent: {
           granted_at: now,
-          policy_version: '1.0',
+          policy_version: CURRENT_POLICY_VERSION,
         },
         diet: data.diet,
         allergies: data.allergies,
@@ -74,11 +75,19 @@ export default function ConsentScreen(_props: Props) {
       </View>
 
       <View style={styles.linkRow}>
-        <Pressable onPress={() => navigation.navigate('Datenschutz')}>
+        <Pressable
+          onPress={() => navigation.navigate('Datenschutz')}
+          accessibilityRole="link"
+          accessibilityLabel="Datenschutzerklärung öffnen"
+        >
           <Text style={styles.link}>Datenschutzerklärung lesen</Text>
         </Pressable>
         <Text style={styles.linkSep}>·</Text>
-        <Pressable onPress={() => navigation.navigate('Impressum')}>
+        <Pressable
+          onPress={() => navigation.navigate('Impressum')}
+          accessibilityRole="link"
+          accessibilityLabel="Impressum öffnen"
+        >
           <Text style={styles.link}>Impressum</Text>
         </Pressable>
       </View>

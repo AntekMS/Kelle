@@ -5,13 +5,14 @@ import {
   FlatList,
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Dish, Ingredient, UserProfile } from '../../types';
-import type { MainStackParamList } from '../../navigation/types';
+import type { FeedStackParamList } from '../../navigation/types';
 import { DISHES } from '../../data/dishes';
 import { INGREDIENTS } from '../../data/ingredients';
 import {
@@ -52,27 +53,31 @@ type FeedState =
       profile: UserProfile;
       listDishIds: Set<string>;
       activeIngredientIds: ReadonlySet<string>;
+      usingOfflineData: boolean;
     };
 
 export default function FeedScreen() {
   const [state, setState] = useState<FeedState>({ status: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
 
-  const loadFeed = useCallback(async () => {
-    setState({ status: 'loading' });
+  const loadFeed = useCallback(async (silent = false) => {
+    if (!silent) setState({ status: 'loading' });
     try {
       await initDatabase();
 
       let cloudDishes: Dish[] = [];
       let cloudIngredients: Ingredient[] = [];
+      let usingOfflineData = false;
       try {
         [cloudDishes, cloudIngredients] = await Promise.all([
           fetchDishesFromCloud(),
           fetchIngredientsFromCloud(),
         ]);
+        if (cloudDishes.length === 0) usingOfflineData = true;
       } catch {
-        // Supabase unreachable — use bundled seed data
+        usingOfflineData = true;
       }
 
       const dishesToSeed = cloudDishes.length > 0 ? cloudDishes : DISHES;
@@ -110,6 +115,7 @@ export default function FeedScreen() {
         profile,
         listDishIds: listSet,
         activeIngredientIds,
+        usingOfflineData,
       });
     } catch (err) {
       setState({
@@ -121,6 +127,29 @@ export default function FeedScreen() {
 
   useEffect(() => {
     loadFeed();
+  }, [loadFeed]);
+
+  const refreshListState = useCallback(async () => {
+    const activeDishIds = await getActiveDishIds();
+    const listSet = new Set(activeDishIds);
+    setState((prev) => {
+      if (prev.status !== 'ready') return prev;
+      const nextActiveIngredients = buildActiveIngredientIds(prev.safeDishes, listSet);
+      const reranked = rankDishes(prev.safeDishes, prev.profile, prev.ingredients, nextActiveIngredients);
+      return { ...prev, listDishIds: listSet, activeIngredientIds: nextActiveIngredients, rankedDishes: reranked };
+    });
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshListState();
+    }, [refreshListState])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadFeed(true);
+    setRefreshing(false);
   }, [loadFeed]);
 
   async function handleMarkCooked(dishId: string) {
@@ -187,18 +216,22 @@ export default function FeedScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{state.message}</Text>
-        <Pressable style={styles.retryButton} onPress={loadFeed}>
+        <Pressable style={styles.retryButton} onPress={() => loadFeed()} accessibilityLabel="Erneut laden">
           <Text style={styles.retryText}>Erneut versuchen</Text>
         </Pressable>
       </View>
     );
   }
 
-  const { rankedDishes, profile, listDishIds } = state;
+  const { rankedDishes, profile, listDishIds, usingOfflineData } = state;
 
   const listBanner =
     listDishIds.size > 0 ? (
-      <Pressable style={styles.listBanner} onPress={() => navigation.navigate('ShoppingList')}>
+      <Pressable
+        style={styles.listBanner}
+        onPress={() => navigation.navigate('ShoppingList')}
+        accessibilityLabel={`Einkaufsliste öffnen, ${listDishIds.size} ${listDishIds.size === 1 ? 'Gericht' : 'Gerichte'}`}
+      >
         <Text style={styles.listBannerText}>
           Einkaufsliste · {listDishIds.size} {listDishIds.size === 1 ? 'Gericht' : 'Gerichte'}
         </Text>
@@ -206,12 +239,30 @@ export default function FeedScreen() {
       </Pressable>
     ) : null;
 
+  const offlineBanner = usingOfflineData ? (
+    <View
+      style={styles.offlineBanner}
+      accessibilityLabel="Offline-Modus: lokale Rezepte werden angezeigt"
+      accessibilityRole="text"
+    >
+      <Text style={styles.offlineBannerText}>Offline – lokale Rezepte</Text>
+    </View>
+  ) : null;
+
+  const header = (listBanner || offlineBanner) ? (
+    <View>
+      {offlineBanner}
+      {listBanner}
+    </View>
+  ) : null;
+
   return (
     <FlatList
       data={rankedDishes}
       keyExtractor={(item) => item.id}
       contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
-      ListHeaderComponent={listBanner}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      ListHeaderComponent={header}
       renderItem={({ item }) => (
         <DishCard
           dish={item}
@@ -244,6 +295,15 @@ const styles = StyleSheet.create({
   },
   retryText: { color: colors.surface, fontSize: 15, fontWeight: '600' },
   list: { padding: 16, backgroundColor: colors.background },
+  offlineBanner: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  offlineBannerText: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
   listBanner: {
     flexDirection: 'row',
     alignItems: 'center',

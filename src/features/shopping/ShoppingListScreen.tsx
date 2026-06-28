@@ -12,7 +12,7 @@ import {
 import ICON_IMAGES from '../../components/icon-images';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { MainStackParamList } from '../../navigation/types';
+import type { FeedStackParamList } from '../../navigation/types';
 import type { ShoppingItem, ShoppingList } from '../../types';
 import {
   getActiveShoppingList,
@@ -23,7 +23,7 @@ import {
 } from '../../db/database';
 import { colors } from '../../theme/colors';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'ShoppingList'>;
+type Props = NativeStackScreenProps<FeedStackParamList, 'ShoppingList'>;
 
 type Section = { title: string; isPantry: boolean; data: ShoppingItem[] };
 
@@ -175,7 +175,7 @@ export default function ShoppingListScreen({ navigation }: Props) {
             <Text style={styles.progress}>
               {checkedBuy}/{buyItems.length} erledigt
             </Text>
-            <Pressable onPress={handleClearPress} style={styles.clearButton}>
+            <Pressable onPress={handleClearPress} style={styles.clearButton} accessibilityLabel="Einkaufsliste leeren">
               <Text style={styles.clearText}>Liste leeren</Text>
             </Pressable>
           </View>

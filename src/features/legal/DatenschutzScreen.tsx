@@ -1,5 +1,6 @@
 import { ScrollView, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CURRENT_POLICY_VERSION } from '../../lib/policy';
 import { colors } from '../../theme/colors';
 
 export default function DatenschutzScreen() {
@@ -65,10 +66,10 @@ export default function DatenschutzScreen() {
       <Text style={styles.section}>7. Änderungen</Text>
       <Text style={styles.body}>
         Bei wesentlichen Änderungen dieser Erklärung wirst du beim nächsten App-Start zur
-        erneuten Einwilligung aufgefordert. Die aktuelle Version ist 1.0.
+        erneuten Einwilligung aufgefordert. Die aktuelle Version ist {CURRENT_POLICY_VERSION}.
       </Text>
 
-      <Text style={styles.meta}>Stand: Juni 2026 · Version 1.0</Text>
+      <Text style={styles.meta}>Stand: Juni 2026 · Version {CURRENT_POLICY_VERSION}</Text>
     </ScrollView>
   );
 }

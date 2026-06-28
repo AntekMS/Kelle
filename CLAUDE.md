@@ -36,6 +36,7 @@ src/
     cloud-catalog.ts # Supabase fetch: fetchDishesFromCloud(), fetchIngredientsFromCloud()
   lib/
     supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars)
+    policy.ts       # CURRENT_POLICY_VERSION Konstante — importiert in ConsentScreen, SettingsScreen, DatenschutzScreen, App.tsx
   store/
     profile-store.ts # SecureStore CRUD: loadProfile, saveProfile, deleteProfile, hasGrantedConsent
     __tests__/
@@ -46,8 +47,11 @@ src/
     onboarding/     # 7-Screen-Flow (WelcomeScreen → ZielScreen → KuecheScreen → ZeitScreen → KoennenScreen → AllergenSetupScreen → ConsentScreen)
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
-                      # State: listDishIds + activeIngredientIds für overlap-Bonus
-                      # Header-Banner bei nicht-leerer Liste → navigiert zu ShoppingList
+                      # State: listDishIds + activeIngredientIds für overlap-Bonus + usingOfflineData
+                      # Header-Banner bei nicht-leerer Liste → navigiert zu ShoppingList (FeedStack)
+                      # Offline-Banner wenn Cloud-Fetch fehlschlägt oder leer (usingOfflineData)
+                      # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
+                      # useFocusEffect → refreshListState() beim Tab-Wechsel (kein Cloud-Refetch)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
       __tests__/
@@ -55,6 +59,10 @@ src/
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
+    favorites/
+      FavoritesScreen.tsx  # Zeigt profile.favorites gefilterte Gerichte; gleiche Aktionen wie Feed
+                           # Kein Scoring/Ranking — zeigt alle Favoriten ungefiltert
+                           # useFocusEffect → vollständiger Reload beim Tab-Wechsel (SQLite-only)
     shopping/
       ShoppingListScreen.tsx  # Multi-Dish-Liste; Gerichte-Card + Zutaten gruppiert nach aisle_category
     settings/
@@ -64,15 +72,22 @@ src/
       ImpressumScreen.tsx     # §5 DDG Impressum — Kontaktdaten noch Platzhalter
   components/
     DishCard.tsx      # technique_taught, diet_verified, time_minutes, Herz-Favorit, Shopping-Toggle
+                      # Hero-Image: height: 180 (fest), resizeMode: cover
                       # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
     dish-images.ts    # Statische Require-Map: image_asset-Name → JPG in assets/
     icon-images.ts    # Statische Require-Map: Icon-Name → PNG in assets/icons/
+                      # 'settings' → icon_technique.png (Platzhalter bis icon_settings.png verfügbar)
   navigation/
     AppContext.ts           # AppContextValue: onConsentGranted, onDeleteProfile
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
     OnboardingNavigator.tsx # Bindet alle 7 Screens + OnboardingProvider ein
-    MainNavigator.tsx       # Feed + ShoppingList + Settings + Datenschutz + Impressum
-    types.ts                # OnboardingStackParamList, MainStackParamList
+    MainNavigator.tsx       # Bottom-Tab-Navigator (3 Tabs) + nested Stacks:
+                            #   FeedTab: FeedStack (Feed → ShoppingList)
+                            #   FavoritesTab: FavStack (Favorites)
+                            #   SettingsTab: SettingsStack (Settings → Datenschutz → Impressum)
+    types.ts                # OnboardingStackParamList
+                            # FeedStackParamList, FavoritesStackParamList, SettingsStackParamList
+                            # MainTabParamList
 ```
 
 ## Datenmodell
@@ -155,6 +170,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 - `UserConsent.granted_at`: ISO8601-String — Existenz = Einwilligung erteilt
 - `hasGrantedConsent()` prüft: `typeof granted_at === 'string' && granted_at.length > 0`
 - Betroffenenrechte in SettingsScreen: Export (Alert mit JSON) + Profil löschen → Onboarding
+- `CURRENT_POLICY_VERSION` in `src/lib/policy.ts` — App.tsx prüft beim Start: Consent vorhanden UND Policy-Version aktuell; sonst → Onboarding
 
 ## Implementierungsstand
 
@@ -168,15 +184,22 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | 7-Screen-Onboarding | ✅ done |
 | Feed-Screen (Pipeline) | ✅ done |
 | Shopping-Liste (multi-dish, base_unit-Normalisierung) | ✅ done |
-| Favoriten-UI (Herz-Button, Score-Bonus) | ✅ done |
+| Favoriten-Screen (FavoritesScreen) | ✅ done — eigener Tab, Herz-Toggle entfernt Gericht direkt |
+| Bottom-Tab-Navigation (Issue #2) | ✅ done — Entdecken / Favoriten / Einstellungen |
+| Bilder-Größe repariert (Issue #1) | ✅ done — DishCard heroImage height: 180 |
 | Settings + DSGVO-Betroffenenrechte | ✅ done |
 | Datenschutzerklärung + Impressum | ✅ done — Kontaktdaten sind noch Platzhalter |
 | Gerichte-Content | ✅ 15 Gerichte, 33 Zutaten |
 | Supabase-Schema migrieren | ✅ Migration `001_catalog` angewendet |
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
-| Icon-System (PNG statt Emoji) | ✅ Code fertig — 15 PNG-Dateien in assets/icons/ noch ausstehend |
+| Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
 | Test-Suite | ✅ 74 Tests grün (scoring, profile-store, database, allergen-filter) |
+| Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
+| Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
+| Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
+| Accessibility-Baseline (Issue #19) | ✅ done — accessibilityLabel auf allen Pressables in 4 Screens |
+| Policy-Version-Konstante (Issue #20) | ✅ done — src/lib/policy.ts; App.tsx prüft Policy-Version bei Start |
 
 ## Design-System
 
@@ -195,13 +218,10 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 
 ## Noch offen
 
-- **PNG-Icons**: 15 Dateien müssen in `assets/icons/` abgelegt werden:
-  `icon_pan.png`, `icon_check.png`, `icon_close.png`, `icon_heart_filled.png`, `icon_heart_outline.png`,
-  `icon_time.png`, `icon_technique.png`, `icon_vegan.png`, `icon_vegetarisch.png`,
-  `icon_herdplatte.png`, `icon_backofen.png`, `icon_mikrowelle.png`, `icon_airfryer.png`,
-  `icon_wasserkocher.png`, `icon_mixer.png`
-- **Impressum/Datenschutz**: Platzhalter `[TODO: contact details]` müssen durch echte Kontaktdaten ersetzt werden
+- **icon_settings.png**: Fehlt noch in `assets/icons/` — aktuell Platzhalter `icon_technique.png`. Monochromes Gear-Icon (512×512 PNG) ablegen und `icon-images.ts` `settings`-Key anpassen.
+- **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release)
 - **Ratings**: Phase 2 — benötigt Cloud-Aggregation
+- **Cloud-Accounts + Login** (Issues #4, #5): v2.0 — nur nicht-sensible Daten (`favorites`, `cooked_dish_ids`) dürfen in die Cloud; `allergies`/`diet`/`consent` bleiben lokal (DSGVO Art. 9)
 
 ## Befehle
 
@@ -220,3 +240,12 @@ npx tsc --noEmit        # Typcheck (0 Fehler)
 - Commit-Stil: `feat:`, `fix:`, `chore:` — kurz, auf Englisch
 - IDE-Hook-Diagnostics sind oft stale — `npx tsc --noEmit` ist die Wahrheit
 - Icons: immer über `ICON_IMAGES` aus `icon-images.ts` — keine Emoji-Zeichen im JSX
+
+## Nach jeder Implementierungs-Aktion
+
+Nach jeder abgeschlossenen Änderung (Feature, Bugfix, Refactor) MUSS Folgendes geprüft und ggf. angepasst werden:
+
+1. **CLAUDE.md** — Architektur-Abschnitt, Implementierungsstand-Tabelle und „Noch offen" aktuell halten
+2. **Roadmap** (`~/.claude/plans/kelle-v1-roadmap.md`) — abgeschlossene Milestones als ✅ markieren, neue Erkenntnisse eintragen
+
+Diese Prüfung ist kein optionaler Schritt — sie gehört zum Abschluss jeder Aufgabe.

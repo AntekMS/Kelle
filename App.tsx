@@ -8,7 +8,8 @@ import { useFonts, Spectral_400Regular, Spectral_600SemiBold, Spectral_700Bold }
 import { AppContext } from './src/navigation/AppContext';
 import OnboardingNavigator from './src/navigation/OnboardingNavigator';
 import MainNavigator from './src/navigation/MainNavigator';
-import { hasGrantedConsent } from './src/store/profile-store';
+import { loadProfile } from './src/store/profile-store';
+import { CURRENT_POLICY_VERSION } from './src/lib/policy';
 import { colors } from './src/theme/colors';
 
 SplashScreen.preventAutoHideAsync();
@@ -21,8 +22,14 @@ export default function App() {
 
   useEffect(() => {
     if (!fontsLoaded) return;
-    hasGrantedConsent()
-      .then((granted) => setAppState(granted ? 'main' : 'onboarding'))
+    loadProfile()
+      .then((profile) => {
+        const hasConsent =
+          typeof profile?.consent.granted_at === 'string' &&
+          profile.consent.granted_at.length > 0;
+        const policyUpToDate = profile?.consent.policy_version === CURRENT_POLICY_VERSION;
+        setAppState(hasConsent && policyUpToDate ? 'main' : 'onboarding');
+      })
       .catch(() => setAppState('onboarding'));
   }, [fontsLoaded]);
 
