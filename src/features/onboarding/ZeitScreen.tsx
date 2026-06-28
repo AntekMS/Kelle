@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { colors } from '../../theme/colors';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Zeit'>;
 
@@ -62,25 +63,25 @@ export default function ZeitScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#F9FAF8',
+    flex: 1, backgroundColor: colors.background,
     padding: 24, gap: 16, justifyContent: 'space-between',
   },
-  heading: { fontSize: 24, fontWeight: '700', color: '#1A2E1A' },
-  subheading: { fontSize: 15, color: '#6B7F6B' },
+  heading: { fontSize: 24, fontWeight: '700', color: colors.text },
+  subheading: { fontSize: 15, color: colors.textMuted },
   options: { flex: 1, justifyContent: 'center', gap: 14 },
   card: {
-    borderWidth: 1.5, borderColor: '#C8D8C8', borderRadius: 16,
-    padding: 22, backgroundColor: '#FFFFFF', gap: 4,
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: 16,
+    padding: 22, backgroundColor: colors.surface, gap: 4,
   },
-  cardSelected: { backgroundColor: '#2D6A4F', borderColor: '#2D6A4F' },
-  cardTitle: { fontSize: 20, fontWeight: '700', color: '#1A2E1A' },
-  cardTitleSelected: { color: '#FFFFFF' },
-  cardSub: { fontSize: 14, color: '#6B7F6B' },
-  cardSubSelected: { color: '#B8D8C8' },
+  cardSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  cardTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
+  cardTitleSelected: { color: colors.surface },
+  cardSub: { fontSize: 14, color: colors.textMuted },
+  cardSubSelected: { color: colors.primaryMuted },
   cta: {
-    backgroundColor: '#2D6A4F', borderRadius: 14,
+    backgroundColor: colors.primary, borderRadius: 14,
     paddingVertical: 18, alignItems: 'center',
   },
   ctaPressed: { opacity: 0.85 },
-  ctaText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  ctaText: { color: colors.surface, fontSize: 17, fontWeight: '600' },
 });

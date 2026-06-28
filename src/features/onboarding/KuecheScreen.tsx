@@ -1,18 +1,26 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { colors } from '../../theme/colors';
+import ICON_IMAGES from '../../components/icon-images';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Kueche'>;
 
-const EQUIPMENT_ITEMS: { value: string; label: string; emoji: string }[] = [
-  { value: 'herdplatte', label: 'Herdplatte', emoji: '🔥' },
-  { value: 'ofen', label: 'Backofen', emoji: '🟫' },
-  { value: 'mikrowelle', label: 'Mikrowelle', emoji: '📦' },
-  { value: 'airfryer', label: 'Airfryer', emoji: '🌀' },
-  { value: 'wasserkocher', label: 'Wasserkocher', emoji: '💧' },
-  { value: 'mixer', label: 'Mixer', emoji: '🥤' },
+type EquipmentItem = {
+  value: string;
+  label: string;
+  iconKey: keyof typeof ICON_IMAGES;
+};
+
+const EQUIPMENT_ITEMS: EquipmentItem[] = [
+  { value: 'herdplatte',  label: 'Herdplatte',  iconKey: 'herdplatte' },
+  { value: 'ofen',        label: 'Backofen',    iconKey: 'backofen' },
+  { value: 'mikrowelle',  label: 'Mikrowelle',  iconKey: 'mikrowelle' },
+  { value: 'airfryer',    label: 'Airfryer',    iconKey: 'airfryer' },
+  { value: 'wasserkocher',label: 'Wasserkocher',iconKey: 'wasserkocher' },
+  { value: 'mixer',       label: 'Mixer',       iconKey: 'mixer' },
 ];
 
 export default function KuecheScreen({ navigation }: Props) {
@@ -51,7 +59,11 @@ export default function KuecheScreen({ navigation }: Props) {
               accessibilityRole="checkbox"
               accessibilityState={{ checked: isSelected }}
             >
-              <Text style={styles.emoji}>{item.emoji}</Text>
+              <Image
+                source={ICON_IMAGES[item.iconKey]}
+                style={[styles.equipmentIcon, isSelected && styles.equipmentIconSelected]}
+                resizeMode="contain"
+              />
               <Text style={[styles.label, isSelected && styles.labelSelected]}>
                 {item.label}
               </Text>
@@ -71,23 +83,24 @@ export default function KuecheScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { backgroundColor: '#F9FAF8' },
+  scroll: { backgroundColor: colors.background },
   container: { padding: 24, paddingBottom: 48, gap: 24 },
-  heading: { fontSize: 24, fontWeight: '700', color: '#1A2E1A' },
-  subheading: { fontSize: 15, color: '#6B7F6B', lineHeight: 22 },
+  heading: { fontSize: 24, fontWeight: '700', color: colors.text },
+  subheading: { fontSize: 15, color: colors.textMuted, lineHeight: 22 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   chip: {
-    width: '47%', borderWidth: 1.5, borderColor: '#C8D8C8', borderRadius: 14,
-    padding: 16, backgroundColor: '#FFFFFF', alignItems: 'center', gap: 8,
+    width: '47%', borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
+    padding: 16, backgroundColor: colors.surface, alignItems: 'center', gap: 8,
   },
-  chipSelected: { backgroundColor: '#2D6A4F', borderColor: '#2D6A4F' },
-  emoji: { fontSize: 28 },
-  label: { fontSize: 15, fontWeight: '500', color: '#2C3E2C' },
-  labelSelected: { color: '#FFFFFF' },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  equipmentIcon: { width: 40, height: 40 },
+  equipmentIconSelected: { tintColor: colors.surface },
+  label: { fontSize: 15, fontWeight: '500', color: colors.text },
+  labelSelected: { color: colors.surface },
   cta: {
-    backgroundColor: '#2D6A4F', borderRadius: 14,
+    backgroundColor: colors.primary, borderRadius: 14,
     paddingVertical: 18, alignItems: 'center',
   },
   ctaPressed: { opacity: 0.85 },
-  ctaText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  ctaText: { color: colors.surface, fontSize: 17, fontWeight: '600' },
 });

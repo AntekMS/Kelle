@@ -1,5 +1,6 @@
 import { Pressable, Text, StyleSheet } from 'react-native';
 import type { Allergen } from '../types';
+import { colors } from '../theme/colors';
 
 const ALLERGEN_LABELS: Record<Allergen, string> = {
   gluten: 'Gluten',
@@ -43,22 +44,22 @@ export default function AllergenChip({ allergen, selected, onToggle }: Props) {
 const styles = StyleSheet.create({
   chip: {
     borderWidth: 1.5,
-    borderColor: '#C8D8C8',
+    borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   chipSelected: {
-    backgroundColor: '#2D6A4F',
-    borderColor: '#2D6A4F',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   label: {
     fontSize: 14,
-    color: '#3A4E3A',
+    color: colors.text,
     fontWeight: '500',
   },
   labelSelected: {
-    color: '#FFFFFF',
+    color: colors.surface,
   },
 });

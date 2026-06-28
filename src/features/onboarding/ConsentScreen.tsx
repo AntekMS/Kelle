@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import ICON_IMAGES from '../../components/icon-images';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { UserProfile } from '../../types';
 import { saveProfile } from '../../store/profile-store';
 import { useAppContext } from '../../navigation/AppContext';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { colors } from '../../theme/colors';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ConsentScreen'>;
 
@@ -15,6 +19,7 @@ export default function ConsentScreen(_props: Props) {
   const [saving, setSaving] = useState(false);
   const { onConsentGranted } = useAppContext();
   const { data } = useOnboardingData();
+  const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
 
   async function handleConsent() {
     if (!checked || saving) return;
@@ -68,6 +73,16 @@ export default function ConsentScreen(_props: Props) {
         </Text>
       </View>
 
+      <View style={styles.linkRow}>
+        <Pressable onPress={() => navigation.navigate('Datenschutz')}>
+          <Text style={styles.link}>Datenschutzerklärung lesen</Text>
+        </Pressable>
+        <Text style={styles.linkSep}>·</Text>
+        <Pressable onPress={() => navigation.navigate('Impressum')}>
+          <Text style={styles.link}>Impressum</Text>
+        </Pressable>
+      </View>
+
       {/* Checkbox — NOT pre-checked, never */}
       <Pressable
         style={styles.checkboxRow}
@@ -77,7 +92,7 @@ export default function ConsentScreen(_props: Props) {
         accessibilityLabel="Ich stimme der lokalen Speicherung meiner Ernährungsdaten zu."
       >
         <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-          {checked && <Text style={styles.checkmark}>✓</Text>}
+          {checked && <Image source={ICON_IMAGES.check} style={styles.checkmarkIcon} resizeMode="contain" />}
         </View>
         <Text style={styles.checkboxLabel}>
           Ich stimme der lokalen Speicherung meiner Ernährungs- und Allergiedaten zu.
@@ -91,7 +106,7 @@ export default function ConsentScreen(_props: Props) {
         accessibilityState={{ disabled: !checked || saving }}
       >
         {saving ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={colors.surface} />
         ) : (
           <Text style={styles.ctaText}>Einwilligung erteilen und loslegen</Text>
         )}
@@ -101,31 +116,34 @@ export default function ConsentScreen(_props: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { backgroundColor: '#F9FAF8' },
+  scroll: { backgroundColor: colors.background },
   container: { padding: 24, paddingBottom: 48, gap: 20 },
-  heading: { fontSize: 22, fontWeight: '700', color: '#1A2E1A', marginBottom: 4 },
-  body: { fontSize: 16, color: '#2C3E2C', lineHeight: 24 },
+  heading: { fontSize: 22, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  body: { fontSize: 16, color: colors.text, lineHeight: 24 },
   bold: { fontWeight: '700' },
   legalNote: {
-    backgroundColor: '#EDF5EF', borderRadius: 10,
-    padding: 16, borderLeftWidth: 3, borderLeftColor: '#2D6A4F',
+    backgroundColor: colors.surfaceAlt, borderRadius: 10,
+    padding: 16, borderLeftWidth: 3, borderLeftColor: colors.primary,
   },
-  legalText: { fontSize: 14, color: '#3A4E3A', lineHeight: 21 },
+  legalText: { fontSize: 14, color: colors.text, lineHeight: 21 },
   checkboxRow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingVertical: 8,
   },
   checkbox: {
     width: 24, height: 24, borderRadius: 6, borderWidth: 2,
-    borderColor: '#C8D8C8', alignItems: 'center', justifyContent: 'center',
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
     marginTop: 1, flexShrink: 0,
   },
-  checkboxChecked: { backgroundColor: '#2D6A4F', borderColor: '#2D6A4F' },
-  checkmark: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  checkboxLabel: { fontSize: 15, color: '#2C3E2C', lineHeight: 22, flex: 1 },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkmarkIcon: { width: 14, height: 14, tintColor: colors.surface },
+  checkboxLabel: { fontSize: 15, color: colors.text, lineHeight: 22, flex: 1 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  link: { fontSize: 14, color: colors.primary, textDecorationLine: 'underline' },
+  linkSep: { fontSize: 14, color: colors.disabled },
   cta: {
-    backgroundColor: '#2D6A4F', borderRadius: 14,
+    backgroundColor: colors.primary, borderRadius: 14,
     paddingVertical: 18, alignItems: 'center', marginTop: 8,
   },
-  ctaDisabled: { backgroundColor: '#A8C4AF' },
-  ctaText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  ctaDisabled: { backgroundColor: colors.disabled },
+  ctaText: { color: colors.surface, fontSize: 17, fontWeight: '600' },
 });

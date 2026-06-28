@@ -6,8 +6,14 @@ export type OnboardingStackParamList = {
   Koennen: undefined;
   ErnährungAllergien: undefined;
   ConsentScreen: undefined;
+  Datenschutz: undefined;
+  Impressum: undefined;
 };
 
 export type MainStackParamList = {
   Feed: undefined;
+  ShoppingList: undefined;
+  Settings: undefined;
+  Datenschutz: undefined;
+  Impressum: undefined;
 };

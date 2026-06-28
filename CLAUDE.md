@@ -15,39 +15,67 @@ Mobile Lern-App für Kocheinsteiger. Rezept-Katalog kommt aus Supabase (read-onl
 - `diet_verified` an einem Gericht ist IMMER hand-authored — Halal/Koscher ist NICHT aus Zutaten ableitbar.
 - Vor größeren Änderungen: neuen Git-Branch anlegen.
 - Niemals API-Keys oder Secrets in den Code oder ins Git committen. `.env` ist gitignored.
+- **SQLite**: Niemals zwei Funktionen mit `withTransactionAsync` parallel per `Promise.all` aufrufen — SQLite erlaubt nur eine Transaktion gleichzeitig pro Connection. Stattdessen sequenziell awaiten.
 
 ## Architektur
 
 ```
 src/
-  data/             # Bundled fallback: dishes.ts, ingredients.ts (3 Gerichte, ~15 Zutaten)
+  data/             # Bundled fallback: dishes.ts (15 Gerichte), ingredients.ts (33 Zutaten)
   db/
-    database.ts     # SQLite-Cache: initDatabase, seedDishes, seedIngredients, getAllDishes, getAllIngredients, markDishCooked
+    database.ts     # SQLite-Cache + Shopping-Liste (schema v2)
+                    #   initDatabase, seedDishes, seedIngredients
+                    #   getAllDishes, getAllIngredients, markDishCooked
+                    #   getOrCreateActiveList, getActiveDishIds
+                    #   addDishToList, removeDishFromList
+                    #   getActiveShoppingList, toggleShoppingItem, clearActiveShoppingList
+                    #   normalizeToBase (exportiert — auch von Tests genutzt)
+                    #   _resetDbForTests (nur für Tests — setzt SQLite-Singleton zurück)
+    __tests__/
+      database.test.ts  # 18 Tests: normalizeToBase, getAllDishes, getOrCreateActiveList etc.
     cloud-catalog.ts # Supabase fetch: fetchDishesFromCloud(), fetchIngredientsFromCloud()
   lib/
     supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars)
   store/
     profile-store.ts # SecureStore CRUD: loadProfile, saveProfile, deleteProfile, hasGrantedConsent
+    __tests__/
+      profile-store.test.ts  # 12 Tests: CRUD + hasGrantedConsent (expo-secure-store gemockt)
   types/
-    index.ts        # Alle Typen (Dish, Ingredient, UserProfile, Allergen, DietOption, Goal …)
+    index.ts        # Alle Typen (Dish, Ingredient, UserProfile, ShoppingList, ShoppingItem …)
   features/
     onboarding/     # 7-Screen-Flow (WelcomeScreen → ZielScreen → KuecheScreen → ZeitScreen → KoennenScreen → AllergenSetupScreen → ConsentScreen)
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
-      scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty
+                      # State: listDishIds + activeIngredientIds für overlap-Bonus
+                      # Header-Banner bei nicht-leerer Liste → navigiert zu ShoppingList
+                      # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
+      scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
+      __tests__/
+        scoring.test.ts  # 22 Tests: scoreDish + rankDishes, alle Scoring-Dimensionen
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
-    shopping/       # Noch nicht implementiert
+    shopping/
+      ShoppingListScreen.tsx  # Multi-Dish-Liste; Gerichte-Card + Zutaten gruppiert nach aisle_category
+    settings/
+      SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export, Löschen) + Links zu Datenschutz/Impressum
+    legal/
+      DatenschutzScreen.tsx   # Statische Datenschutzerklärung (Art. 13 DSGVO) — Kontaktdaten noch Platzhalter
+      ImpressumScreen.tsx     # §5 DDG Impressum — Kontaktdaten noch Platzhalter
   components/
-    DishCard.tsx    # technique_taught, diet_verified, time_minutes
+    DishCard.tsx      # technique_taught, diet_verified, time_minutes, Herz-Favorit, Shopping-Toggle
+                      # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
+    dish-images.ts    # Statische Require-Map: image_asset-Name → JPG in assets/
+    icon-images.ts    # Statische Require-Map: Icon-Name → PNG in assets/icons/
   navigation/
+    AppContext.ts           # AppContextValue: onConsentGranted, onDeleteProfile
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
     OnboardingNavigator.tsx # Bindet alle 7 Screens + OnboardingProvider ein
-    types.ts                # OnboardingStackParamList, AppStackParamList
+    MainNavigator.tsx       # Feed + ShoppingList + Settings + Datenschutz + Impressum
+    types.ts                # OnboardingStackParamList, MainStackParamList
 ```
 
-## Datenmodell (aktuell — nach Spec-Alignment, commit 9abe3db)
+## Datenmodell
 
 ```ts
 type Allergen = 'gluten' | 'crustaceans' | 'eggs' | 'fish' | 'peanuts' | 'soybeans'
@@ -81,6 +109,16 @@ interface UserProfile {
   skill_techniques: string[]; cooked_dish_ids: string[]; favorites: string[];
   created_at: string; updated_at: string;
 }
+interface ShoppingItem {
+  id: string; list_id: string; ingredient_id: string; ingredient_name: string;
+  amount_base: number; base_unit: 'g' | 'ml'; aisle_category: string;
+  is_pantry_staple: boolean; is_checked: boolean;
+}
+interface ShoppingList {
+  id: string; created_at: string;
+  dishes: Array<{ dish_id: string; dish_name: string }>;
+  items: ShoppingItem[];
+}
 ```
 
 ## Filter-Logik (`allergen-filter.ts`)
@@ -95,42 +133,82 @@ Vier harte Ausschlusskriterien — alle müssen bestanden werden:
 ## Scoring-Formel (`scoring.ts`)
 
 ```
-score = ziel_fit × machbarkeit × repetition_penalty
+score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
 machbarkeit: neueTekniken=0→0.8, 1→1.0, 2→0.4, 3+→0.1
 ziel_fit: [0.7..1.0] basierend auf Nährwerten × Goals
 repetition_penalty: gekochte Gerichte ×0.7
+favBonus: +0.08 wenn Favorit
+overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 ```
+
+## Shopping-Liste (`database.ts` — Schema v2)
+
+- Singleton-Liste mit `ACTIVE_LIST_ID = 'active'`
+- 4 Tabellen: `shopping_lists`, `shopping_list_dishes`, `shopping_source_items`, `shopping_items`
+- `normalizeToBase(amount, unit, ingredient)` — konvertiert in base_unit (g/ml), exportiert
+- `recalculateItems()` — aggregiert Mengen, bewahrt is_checked-Zustand
+- `formatAmount(amountBase, baseUnit)` in ShoppingListScreen — zeigt kg/l ab 1000
 
 ## Einwilligung (Art. 9)
 
 - Kein Vorabhäkchen. Consent-Checkbox startet immer `false`.
 - `UserConsent.granted_at`: ISO8601-String — Existenz = Einwilligung erteilt
 - `hasGrantedConsent()` prüft: `typeof granted_at === 'string' && granted_at.length > 0`
-- Betroffenenrechte (Bearbeiten / Export / Löschen) in Settings — noch nicht implementiert
+- Betroffenenrechte in SettingsScreen: Export (Alert mit JSON) + Profil löschen → Onboarding
 
 ## Implementierungsstand
 
 | Schritt | Status |
 |---|---|
-| Typen + Datenmodell | ✅ done (commit 9abe3db) |
-| SQLite-Cache (database.ts) | ✅ done |
+| Typen + Datenmodell | ✅ done |
+| SQLite-Cache (database.ts) | ✅ done — Schema v2, multi-dish shopping |
 | Supabase-Client + cloud-catalog | ✅ done — `.env` mit Credentials liegt lokal |
 | Allergenfilter + 4 Filter | ✅ done — 22 Tests grün |
-| Scoring (Spec-Formel) | ✅ done |
+| Scoring (inkl. favBonus + overlapBonus) | ✅ done — 22 Tests grün |
 | 7-Screen-Onboarding | ✅ done |
 | Feed-Screen (Pipeline) | ✅ done |
-| Shopping-Liste | ❌ noch nicht begonnen |
-| Datenschutzerklärung + Impressum | ❌ noch nicht begonnen |
-| Gerichte-Content (15–25 total) | ⚠️ 3 Gerichte vorhanden, Rest fehlt |
-| Supabase-Schema migrieren | ⚠️ SQL liegt in `supabase/migrations/001_catalog.sql` — Nutzer muss im SQL-Editor ausführen |
-| Supabase-Seed (Gerichte/Zutaten) | ❌ noch nicht erledigt |
+| Shopping-Liste (multi-dish, base_unit-Normalisierung) | ✅ done |
+| Favoriten-UI (Herz-Button, Score-Bonus) | ✅ done |
+| Settings + DSGVO-Betroffenenrechte | ✅ done |
+| Datenschutzerklärung + Impressum | ✅ done — Kontaktdaten sind noch Platzhalter |
+| Gerichte-Content | ✅ 15 Gerichte, 33 Zutaten |
+| Supabase-Schema migrieren | ✅ Migration `001_catalog` angewendet |
+| Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
+| Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
+| Icon-System (PNG statt Emoji) | ✅ Code fertig — 15 PNG-Dateien in assets/icons/ noch ausstehend |
+| Test-Suite | ✅ 74 Tests grün (scoring, profile-store, database, allergen-filter) |
+
+## Design-System
+
+```
+src/theme/colors.ts        # Zentrale Farbpalette (Terrakotta #C2613D, Salbei #889E7B, Hafer #F4ECDD …)
+src/components/dish-images.ts  # Statische Require-Map: image_asset-Name → JPG in assets/
+src/components/icon-images.ts  # Statische Require-Map: Icon-Name → PNG in assets/icons/
+assets/icons/              # 15 PNG-Dateien (noch vom Nutzer anzulegen — siehe unten)
+```
+
+Fonts: `Spectral_400Regular`, `Spectral_600SemiBold`, `Spectral_700Bold` via `@expo-google-fonts/spectral`.
+Font-Loading in `App.tsx` mit `useFonts` + `SplashScreen.preventAutoHideAsync()`.
+Spectral aktiv auf: DishCard-Name (`600SemiBold`), WelcomeScreen-Titel (`700Bold`).
+
+Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style gesetzt.
+
+## Noch offen
+
+- **PNG-Icons**: 15 Dateien müssen in `assets/icons/` abgelegt werden:
+  `icon_pan.png`, `icon_check.png`, `icon_close.png`, `icon_heart_filled.png`, `icon_heart_outline.png`,
+  `icon_time.png`, `icon_technique.png`, `icon_vegan.png`, `icon_vegetarisch.png`,
+  `icon_herdplatte.png`, `icon_backofen.png`, `icon_mikrowelle.png`, `icon_airfryer.png`,
+  `icon_wasserkocher.png`, `icon_mixer.png`
+- **Impressum/Datenschutz**: Platzhalter `[TODO: contact details]` müssen durch echte Kontaktdaten ersetzt werden
+- **Ratings**: Phase 2 — benötigt Cloud-Aggregation
 
 ## Befehle
 
 ```bash
 npx expo start          # Dev-Server
 npx expo start --ios    # iOS-Simulator
-npx jest                # Tests (22 grün)
+npx jest                # Tests (74 grün)
 npx tsc --noEmit        # Typcheck (0 Fehler)
 ```
 
@@ -138,6 +216,7 @@ npx tsc --noEmit        # Typcheck (0 Fehler)
 
 - TypeScript strict — keine `any`-Types
 - Komponenten: PascalCase, Dateien: kebab-case
-- Jede Funktion im Allergenfilter hat Unit-Tests
+- Jede Kernfunktion hat Unit-Tests (scoring, profile-store, database, allergen-filter)
 - Commit-Stil: `feat:`, `fix:`, `chore:` — kurz, auf Englisch
 - IDE-Hook-Diagnostics sind oft stale — `npx tsc --noEmit` ist die Wahrheit
+- Icons: immer über `ICON_IMAGES` aus `icon-images.ts` — keine Emoji-Zeichen im JSX

@@ -101,28 +101,55 @@ function penaltyRepetition(dish: Dish, profile: UserProfile): number {
   return profile.cooked_dish_ids.includes(dish.id) ? W_ALREADY_COOKED : 1.0;
 }
 
+// ── Bonus Favoriten ────────────────────────────────────────────────────────
+// Small additive boost so favorites float slightly higher without overriding safety/feasibility.
+
+const BONUS_FAVORITE = 0.08;
+
+// ── Bonus geteilte Zutaten ─────────────────────────────────────────────────
+// Dishes that share ingredients with the active shopping list float higher —
+// shorter shopping trip, less waste.
+
+const MAX_OVERLAP_BONUS = 0.12;
+
+function scoreIngredientOverlap(
+  dish: Dish,
+  activeIngredientIds: ReadonlySet<string>
+): number {
+  if (activeIngredientIds.size === 0 || dish.ingredients.length === 0) return 0;
+  const overlap = dish.ingredients.filter((di) =>
+    activeIngredientIds.has(di.ingredient_id)
+  ).length;
+  return (overlap / dish.ingredients.length) * MAX_OVERLAP_BONUS;
+}
+
 // ── Final Score ────────────────────────────────────────────────────────────
 
 export function scoreDish(
   dish: Dish,
   profile: UserProfile,
-  ingredientMap: Map<string, Ingredient>
+  ingredientMap: Map<string, Ingredient>,
+  activeIngredientIds: ReadonlySet<string> = new Set()
 ): number {
   const machbarkeit = scoreMachbarkeit(dish, profile);
   const zielFit = scoreZielFit(dish, profile.goals, ingredientMap);
   const repetition = penaltyRepetition(dish, profile);
+  const favBonus = profile.favorites.includes(dish.id) ? BONUS_FAVORITE : 0;
+  const overlapBonus = scoreIngredientOverlap(dish, activeIngredientIds);
 
-  // Spec formula: ziel_fit × machbarkeit − strafe_wiederholung (applied as multiplier)
-  return zielFit * machbarkeit * repetition;
+  return zielFit * machbarkeit * repetition + favBonus + overlapBonus;
 }
 
 export function rankDishes(
   safeDishes: Dish[],
   profile: UserProfile,
-  ingredients: Ingredient[] = []
+  ingredients: Ingredient[] = [],
+  activeIngredientIds: ReadonlySet<string> = new Set()
 ): Dish[] {
   const ingredientMap = new Map(ingredients.map((i) => [i.id, i]));
   return [...safeDishes].sort(
-    (a, b) => scoreDish(b, profile, ingredientMap) - scoreDish(a, profile, ingredientMap)
+    (a, b) =>
+      scoreDish(b, profile, ingredientMap, activeIngredientIds) -
+      scoreDish(a, profile, ingredientMap, activeIngredientIds)
   );
 }

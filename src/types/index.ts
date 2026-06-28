@@ -90,6 +90,25 @@ export interface Dish {
   image_asset: string;
 }
 
+export interface ShoppingItem {
+  id: string;
+  list_id: string;
+  ingredient_id: string;
+  ingredient_name: string;
+  amount_base: number;
+  base_unit: 'g' | 'ml';
+  aisle_category: string;
+  is_pantry_staple: boolean;
+  is_checked: boolean;
+}
+
+export interface ShoppingList {
+  id: string;
+  created_at: string;
+  dishes: Array<{ dish_id: string; dish_name: string }>;
+  items: ShoppingItem[];
+}
+
 export interface UserConsent {
   granted_at: string;   // ISO 8601
   policy_version: string;

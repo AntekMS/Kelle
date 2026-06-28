@@ -8,6 +8,8 @@ import ZeitScreen from '../features/onboarding/ZeitScreen';
 import KoennenScreen from '../features/onboarding/KoennenScreen';
 import ErnährungAllergienenScreen from '../features/onboarding/AllergenSetupScreen';
 import ConsentScreen from '../features/onboarding/ConsentScreen';
+import DatenschutzScreen from '../features/legal/DatenschutzScreen';
+import ImpressumScreen from '../features/legal/ImpressumScreen';
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
@@ -45,6 +47,16 @@ export default function OnboardingNavigator() {
           name="ConsentScreen"
           component={ConsentScreen}
           options={{ headerShown: true, title: 'Datenschutz-Einwilligung' }}
+        />
+        <Stack.Screen
+          name="Datenschutz"
+          component={DatenschutzScreen}
+          options={{ headerShown: true, title: 'Datenschutzerklärung' }}
+        />
+        <Stack.Screen
+          name="Impressum"
+          component={ImpressumScreen}
+          options={{ headerShown: true, title: 'Impressum' }}
         />
       </Stack.Navigator>
     </OnboardingProvider>

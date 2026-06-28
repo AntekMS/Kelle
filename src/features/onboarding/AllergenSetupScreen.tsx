@@ -6,6 +6,7 @@ import type { Allergen, DietOption } from '../../types';
 import { EU14_ALLERGENS } from '../../types';
 import AllergenChip from '../../components/AllergenChip';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { colors } from '../../theme/colors';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ErnährungAllergien'>;
 
@@ -99,27 +100,27 @@ function RadioRow({ label, selected, onPress }: { label: string; selected: boole
 }
 
 const styles = StyleSheet.create({
-  scroll: { backgroundColor: '#F9FAF8' },
+  scroll: { backgroundColor: colors.background },
   container: { padding: 24, paddingBottom: 48, gap: 32 },
   section: { gap: 12 },
   sectionTitle: {
-    fontSize: 15, fontWeight: '600', color: '#1A2E1A',
+    fontSize: 15, fontWeight: '600', color: colors.text,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  hint: { fontSize: 13, color: '#6B7F6B', marginTop: 4 },
+  hint: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   radioOuter: {
     width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-    borderColor: '#C8D8C8', alignItems: 'center', justifyContent: 'center',
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
   },
-  radioOuterSelected: { borderColor: '#2D6A4F' },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2D6A4F' },
-  radioLabel: { fontSize: 16, color: '#2C3E2C' },
+  radioOuterSelected: { borderColor: colors.primary },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  radioLabel: { fontSize: 16, color: colors.text },
   cta: {
-    backgroundColor: '#2D6A4F', borderRadius: 14,
+    backgroundColor: colors.primary, borderRadius: 14,
     paddingVertical: 18, alignItems: 'center', marginTop: 8,
   },
   ctaPressed: { opacity: 0.85 },
-  ctaText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  ctaText: { color: colors.surface, fontSize: 17, fontWeight: '600' },
 });

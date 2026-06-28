@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import type { Goal } from '../../types';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
+import { colors } from '../../theme/colors';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Ziel'>;
 
@@ -74,23 +75,23 @@ export default function ZielScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { backgroundColor: '#F9FAF8' },
+  scroll: { backgroundColor: colors.background },
   container: { padding: 24, paddingBottom: 48, gap: 16 },
-  heading: { fontSize: 24, fontWeight: '700', color: '#1A2E1A', marginBottom: 4 },
-  subheading: { fontSize: 15, color: '#6B7F6B', marginBottom: 8 },
+  heading: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  subheading: { fontSize: 15, color: colors.textMuted, marginBottom: 8 },
   card: {
-    borderWidth: 1.5, borderColor: '#C8D8C8', borderRadius: 14,
-    padding: 18, backgroundColor: '#FFFFFF', gap: 4,
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
+    padding: 18, backgroundColor: colors.surface, gap: 4,
   },
-  cardSelected: { backgroundColor: '#2D6A4F', borderColor: '#2D6A4F' },
-  cardTitle: { fontSize: 17, fontWeight: '600', color: '#1A2E1A' },
-  cardTitleSelected: { color: '#FFFFFF' },
-  cardDesc: { fontSize: 14, color: '#6B7F6B' },
-  cardDescSelected: { color: '#B8D8C8' },
+  cardSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
+  cardTitleSelected: { color: colors.surface },
+  cardDesc: { fontSize: 14, color: colors.textMuted },
+  cardDescSelected: { color: colors.primaryMuted },
   cta: {
-    backgroundColor: '#2D6A4F', borderRadius: 14,
+    backgroundColor: colors.primary, borderRadius: 14,
     paddingVertical: 18, alignItems: 'center', marginTop: 8,
   },
   ctaPressed: { opacity: 0.85 },
-  ctaText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  ctaText: { color: colors.surface, fontSize: 17, fontWeight: '600' },
 });

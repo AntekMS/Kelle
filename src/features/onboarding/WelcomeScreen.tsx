@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Image, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/types';
+import { colors } from '../../theme/colors';
+import ICON_IMAGES from '../../components/icon-images';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Welcome'>;
 
@@ -11,9 +13,9 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <View style={[styles.container, { paddingTop: insets.top + 32 }]}>
       <View style={styles.hero}>
-        <Text style={styles.icon}>🍳</Text>
-        <Text style={styles.title}>Küchen-Coach</Text>
-        <Text style={styles.tagline}>Kochen lernen, Schritt für Schritt.</Text>
+        <Image source={ICON_IMAGES.pan} style={styles.heroIcon} resizeMode="contain" />
+        <Text style={styles.title}>Kelle</Text>
+        <Text style={styles.tagline}>Einfach. Selbst. Gekocht.</Text>
       </View>
 
       <View style={styles.bullets}>
@@ -35,7 +37,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 function BulletItem({ text }: { text: string }) {
   return (
     <View style={styles.bullet}>
-      <Text style={styles.bulletDot}>✓</Text>
+      <Image source={ICON_IMAGES.check} style={styles.bulletIcon} resizeMode="contain" />
       <Text style={styles.bulletText}>{text}</Text>
     </View>
   );
@@ -44,7 +46,7 @@ function BulletItem({ text }: { text: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAF8',
+    backgroundColor: colors.background,
     paddingHorizontal: 28,
     paddingBottom: 40,
     justifyContent: 'space-between',
@@ -53,20 +55,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  icon: {
-    fontSize: 64,
+  heroIcon: {
+    width: 80,
+    height: 80,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1A2E1A',
+    fontSize: 48,
+    fontFamily: 'Spectral_700Bold',
+    color: colors.text,
     letterSpacing: -0.5,
   },
   tagline: {
     fontSize: 17,
-    color: '#4A5E4A',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 24,
+    letterSpacing: 0.5,
   },
   bullets: {
     gap: 16,
@@ -76,20 +80,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  bulletDot: {
-    fontSize: 16,
-    color: '#2D6A4F',
-    fontWeight: '600',
-    lineHeight: 24,
+  bulletIcon: {
+    width: 20,
+    height: 20,
+    marginTop: 2,
+    tintColor: colors.primary,
   },
   bulletText: {
     fontSize: 16,
-    color: '#2C3E2C',
+    color: colors.text,
     lineHeight: 24,
     flex: 1,
   },
   cta: {
-    backgroundColor: '#2D6A4F',
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',
@@ -98,7 +102,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 17,
     fontWeight: '600',
   },
