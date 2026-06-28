@@ -148,8 +148,11 @@ export default function FeedScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadFeed(true);
-    setRefreshing(false);
+    try {
+      await loadFeed(true);
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadFeed]);
 
   async function handleMarkCooked(dishId: string) {
