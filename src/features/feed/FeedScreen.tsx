@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   ActivityIndicator,
   Pressable,
@@ -59,6 +60,7 @@ type FeedState =
 export default function FeedScreen() {
   const [state, setState] = useState<FeedState>({ status: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
 
@@ -229,6 +231,11 @@ export default function FeedScreen() {
 
   const { rankedDishes, profile, listDishIds, usingOfflineData, ingredientMap } = state;
 
+  const query = searchQuery.trim().toLowerCase();
+  const visibleDishes = query
+    ? rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
+    : rankedDishes;
+
   const listBanner =
     listDishIds.size > 0 ? (
       <Pressable
@@ -261,13 +268,28 @@ export default function FeedScreen() {
   ) : null;
 
   return (
-    <FlatList
-      data={rankedDishes}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-      ListHeaderComponent={header}
-      renderItem={({ item }) => (
+    <View style={styles.container}>
+      <View style={styles.searchWrap}>
+        <TextInput
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Gericht suchen…"
+          placeholderTextColor={colors.textMuted}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          autoCorrect={false}
+          accessibilityLabel="Gericht suchen"
+        />
+      </View>
+      <FlatList
+        data={visibleDishes}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+        ListHeaderComponent={header}
+        renderItem={({ item }) => (
         <DishCard
           dish={item}
           isCooked={profile.cooked_dish_ids.includes(item.id)}
@@ -279,15 +301,27 @@ export default function FeedScreen() {
           ingredientMap={ingredientMap}
         />
       )}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Keine Gerichte verfügbar.</Text>
-          <Text style={styles.emptySubtitle}>
-            Alle Gerichte wurden aufgrund deiner Einstellungen gefiltert.
-          </Text>
-        </View>
-      }
-    />
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            {query ? (
+              <>
+                <Text style={styles.emptyTitle}>Keine Treffer</Text>
+                <Text style={styles.emptySubtitle}>
+                  Für „{searchQuery.trim()}" wurde kein Gericht gefunden.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyTitle}>Keine Gerichte verfügbar.</Text>
+                <Text style={styles.emptySubtitle}>
+                  Alle Gerichte wurden aufgrund deiner Einstellungen gefiltert.
+                </Text>
+              </>
+            )}
+          </View>
+        }
+      />
+    </View>
   );
 }
 
@@ -299,6 +333,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingVertical: 12,
   },
   retryText: { color: colors.surface, fontSize: 15, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.background },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: colors.background,
+  },
+  searchInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: colors.text,
+  },
   list: { padding: 16, backgroundColor: colors.background },
   offlineBanner: {
     backgroundColor: colors.surfaceAlt,
