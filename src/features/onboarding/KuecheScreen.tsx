@@ -5,23 +5,9 @@ import type { OnboardingStackParamList } from '../../navigation/types';
 import { useOnboardingData } from '../../navigation/OnboardingContext';
 import { colors } from '../../theme/colors';
 import ICON_IMAGES from '../../components/icon-images';
+import { EQUIPMENT_META } from '../../types';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Kueche'>;
-
-type EquipmentItem = {
-  value: string;
-  label: string;
-  iconKey: keyof typeof ICON_IMAGES;
-};
-
-const EQUIPMENT_ITEMS: EquipmentItem[] = [
-  { value: 'herdplatte',  label: 'Herdplatte',  iconKey: 'herdplatte' },
-  { value: 'ofen',        label: 'Backofen',    iconKey: 'backofen' },
-  { value: 'mikrowelle',  label: 'Mikrowelle',  iconKey: 'mikrowelle' },
-  { value: 'airfryer',    label: 'Airfryer',    iconKey: 'airfryer' },
-  { value: 'wasserkocher',label: 'Wasserkocher',iconKey: 'wasserkocher' },
-  { value: 'mixer',       label: 'Mixer',       iconKey: 'mixer' },
-];
 
 export default function KuecheScreen({ navigation }: Props) {
   const { update } = useOnboardingData();
@@ -49,7 +35,7 @@ export default function KuecheScreen({ navigation }: Props) {
       </Text>
 
       <View style={styles.grid}>
-        {EQUIPMENT_ITEMS.map((item) => {
+        {EQUIPMENT_META.map((item) => {
           const isSelected = selected.has(item.value);
           return (
             <Pressable

@@ -129,7 +129,7 @@ export const DISHES: Dish[] = [
     technique_taught: 'würzen',
     diet_verified: ['vegan', 'vegetarian', 'halal'],
     equipment_required: [],
-    equipment_optional: ['toaster'],
+    equipment_optional: ['toaster', 'sandwichmaker'],
     ingredients: [
       { ingredient_id: 'ing-toast-bread', amount: 2, unit: 'stueck' },
       { ingredient_id: 'ing-avocado', amount: 1, unit: 'stueck' },
@@ -238,7 +238,7 @@ export const DISHES: Dish[] = [
     technique_taught: 'dressieren',
     diet_verified: ['vegetarian'],
     equipment_required: [['herdplatte']],
-    equipment_optional: ['toaster'],
+    equipment_optional: ['toaster', 'sandwichmaker'],
     ingredients: [
       { ingredient_id: 'ing-eggs', amount: 2, unit: 'stueck' },
       { ingredient_id: 'ing-toast-bread', amount: 2, unit: 'stueck' },

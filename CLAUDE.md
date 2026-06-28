@@ -54,8 +54,11 @@ src/
       profile-store.test.ts  # 12 Tests: CRUD + hasGrantedConsent (expo-secure-store gemockt)
   types/
     index.ts        # Alle Typen (Dish, Ingredient, UserProfile, ShoppingList, ShoppingItem …)
+                    # EQUIPMENT_OPTIONS (Equipment-Union) + EQUIPMENT_META (value/label/iconKey,
+                    #   `satisfies` → einzige Quelle für den Geräte-Picker, kein Drift)
   features/
     onboarding/     # 7-Screen-Flow (WelcomeScreen → ZielScreen → KuecheScreen → ZeitScreen → KoennenScreen → AllergenSetupScreen → ConsentScreen)
+                    # KuecheScreen rendert EQUIPMENT_META (10 Geräte inkl. Toaster/Pürierstab/Sandwichmaker/Reiskocher)
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
                       # State: listDishIds + activeIngredientIds für overlap-Bonus + usingOfflineData
@@ -103,6 +106,7 @@ src/
     icon-images.ts    # Statische Require-Map: Icon-Name → PNG in assets/icons/
                       # 'settings' → icon_technique.png (Platzhalter bis icon_settings.png verfügbar)
                       # 'shopping' → icon_check.png (Platzhalter bis icon_cart.png verfügbar)
+                      # puerierstab/toaster/sandwichmaker/reiskocher → icon_technique.png (Platzhalter)
   navigation/
     AppContext.ts           # AppContextValue: onConsentGranted, onDeleteProfile
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
@@ -227,7 +231,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 98 Tests grün (scoring, profile-store, database, allergen-filter, units) |
+| Test-Suite | ✅ 102 Tests grün (scoring, profile-store, database, allergen-filter, units, equipment) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
@@ -239,6 +243,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Nährwerte auf DishCard (Issue #7) | ✅ done — computeNutritionPerServing exportiert |
 | Suchfeld im Feed (Issue #22) | ✅ done — client-seitiger Name-Filter |
 | Einkaufslisten-UX (Issue #8) | ✅ done — 4. Tab, DishDetailScreen, Thumbnails, Gewürz-Kategorien konsistent (Bundled + Supabase) |
+| Mehr Küchengeräte (Issue #9) | ✅ done — Toaster/Pürierstab/Sandwichmaker/Reiskocher; EQUIPMENT_META als Single Source; Icons Platzhalter |
 
 ## Design-System
 
@@ -259,6 +264,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 
 - **icon_settings.png**: Fehlt noch in `assets/icons/` — aktuell Platzhalter `icon_technique.png`. Monochromes Gear-Icon (512×512 PNG) ablegen und `icon-images.ts` `settings`-Key anpassen.
 - **icon_cart.png**: Fehlt noch in `assets/icons/` — Einkauf-Tab nutzt Platzhalter `icon_check.png`. Monochromes Warenkorb-Icon (512×512 PNG) ablegen und `icon-images.ts` `shopping`-Key anpassen.
+- **Geräte-Icons** (Issue #9): `icon_puerierstab.png`, `icon_toaster.png`, `icon_sandwichmaker.png`, `icon_reiskocher.png` fehlen — aktuell alle Platzhalter `icon_technique.png`. Monochrome 512×512 PNGs ablegen und die jeweiligen `iconKey`-Mappings in `icon-images.ts` anpassen.
 - **Supabase-Hosting-Region**: Projekt liegt in `ap-south-1` (Mumbai), NICHT EU. DatenschutzScreen behauptet „EU-Hosting" → vor Release korrigieren (nur Katalogdaten, keine Art.-9-Daten in der Cloud, aber Aussage muss stimmen).
 - **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release)
 - **Ratings**: Phase 2 — benötigt Cloud-Aggregation

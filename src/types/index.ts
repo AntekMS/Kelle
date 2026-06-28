@@ -37,9 +37,26 @@ export const EQUIPMENT_OPTIONS = [
   'mixer',
   'puerierstab',
   'toaster',
+  'sandwichmaker',
+  'reiskocher',
 ] as const;
 
 export type Equipment = (typeof EQUIPMENT_OPTIONS)[number];
+
+// Single source of truth for the equipment picker (KuecheScreen): label + icon per option.
+// `satisfies` guarantees every value is a valid Equipment, so picker and type can never drift.
+export const EQUIPMENT_META = [
+  { value: 'herdplatte',    label: 'Herdplatte',    iconKey: 'herdplatte' },
+  { value: 'ofen',          label: 'Backofen',      iconKey: 'backofen' },
+  { value: 'mikrowelle',    label: 'Mikrowelle',    iconKey: 'mikrowelle' },
+  { value: 'airfryer',      label: 'Airfryer',      iconKey: 'airfryer' },
+  { value: 'wasserkocher',  label: 'Wasserkocher',  iconKey: 'wasserkocher' },
+  { value: 'mixer',         label: 'Mixer',         iconKey: 'mixer' },
+  { value: 'puerierstab',   label: 'Pürierstab',    iconKey: 'puerierstab' },
+  { value: 'toaster',       label: 'Toaster',       iconKey: 'toaster' },
+  { value: 'sandwichmaker', label: 'Sandwichmaker', iconKey: 'sandwichmaker' },
+  { value: 'reiskocher',    label: 'Reiskocher',    iconKey: 'reiskocher' },
+] as const satisfies ReadonlyArray<{ value: Equipment; label: string; iconKey: string }>;
 
 // Nutrient values per 100g of the ingredient in its reference state (raw or cooked — consistent per ingredient)
 export interface NutrientsPer100g {

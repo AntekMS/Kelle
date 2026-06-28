@@ -31,6 +31,11 @@ const ICON_IMAGES: Record<string, ImageSourcePropType> = {
   airfryer:        require('../../assets/icons/icon_airfryer.png'),
   wasserkocher:    require('../../assets/icons/icon_wasserkocher.png'),
   mixer:           require('../../assets/icons/icon_mixer.png'),
+  // TODO: eigene Icons liefern — aktuell Platzhalter icon_technique.png
+  puerierstab:     require('../../assets/icons/icon_technique.png'),
+  toaster:         require('../../assets/icons/icon_technique.png'),
+  sandwichmaker:   require('../../assets/icons/icon_technique.png'),
+  reiskocher:      require('../../assets/icons/icon_technique.png'),
 };
 
 export default ICON_IMAGES;
