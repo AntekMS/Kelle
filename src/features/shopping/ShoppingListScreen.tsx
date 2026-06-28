@@ -22,20 +22,11 @@ import {
   getAllIngredients,
 } from '../../db/database';
 import { colors } from '../../theme/colors';
+import { formatShoppingAmount } from '../../lib/units';
 
 type Props = NativeStackScreenProps<FeedStackParamList, 'ShoppingList'>;
 
 type Section = { title: string; isPantry: boolean; data: ShoppingItem[] };
-
-function formatAmount(amountBase: number, baseUnit: string): string {
-  if (baseUnit === 'g' && amountBase >= 1000) {
-    return `${(amountBase / 1000).toFixed(1).replace('.0', '')} kg`;
-  }
-  if (baseUnit === 'ml' && amountBase >= 1000) {
-    return `${(amountBase / 1000).toFixed(1).replace('.0', '')} l`;
-  }
-  return `${Math.round(amountBase)} ${baseUnit}`;
-}
 
 export default function ShoppingListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -206,7 +197,7 @@ export default function ShoppingListScreen({ navigation }: Props) {
             {item.ingredient_name}
           </Text>
           <Text style={[styles.itemAmount, item.is_checked && styles.itemAmountChecked]}>
-            {formatAmount(item.amount_base, item.base_unit)}
+            {formatShoppingAmount(item.amount_base, ingredientMap.get(item.ingredient_id))}
           </Text>
         </Pressable>
       )}

@@ -15,3 +15,30 @@ export function normalizeToBase(amount: number, unit: string, ing: Ingredient): 
   const factor = ing.unit_conversions[unit];
   return factor != null ? amount * factor : amount;
 }
+
+/**
+ * Formats an aggregated shopping-list amount (always stored in base_unit g/ml) for display.
+ *
+ * Countable ingredients (those with a `stueck` conversion, e.g. eggs, onions, lemons) are
+ * shown as whole pieces ("2 Stück") instead of grams — users don't think in grams of egg.
+ * The amount stays stored in grams (so aggregation and nutrition stay correct); only the
+ * display is converted back via the same `stueck` factor.
+ *
+ * Everything else: kg/l from 1000 upwards, otherwise the raw base unit.
+ */
+export function formatShoppingAmount(amountBase: number, ing: Ingredient | undefined): string {
+  const stueckFactor = ing?.unit_conversions.stueck;
+  if (stueckFactor != null && stueckFactor > 0) {
+    const pieces = Math.max(1, Math.round(amountBase / stueckFactor));
+    return `${pieces} Stück`;
+  }
+
+  const baseUnit = ing?.base_unit ?? 'g';
+  if (baseUnit === 'g' && amountBase >= 1000) {
+    return `${(amountBase / 1000).toFixed(1).replace('.0', '')} kg`;
+  }
+  if (baseUnit === 'ml' && amountBase >= 1000) {
+    return `${(amountBase / 1000).toFixed(1).replace('.0', '')} l`;
+  }
+  return `${Math.round(amountBase)} ${baseUnit}`;
+}
