@@ -130,7 +130,7 @@ export default function FavoritesScreen() {
     );
   }
 
-  const { dishes, profile, listDishIds } = state;
+  const { dishes, profile, listDishIds, ingredientMap } = state;
 
   return (
     <FlatList
@@ -146,6 +146,7 @@ export default function FavoritesScreen() {
           onMarkCooked={handleMarkCooked}
           onToggleShoppingList={handleToggleShoppingList}
           onToggleFavorite={handleToggleFavorite}
+          ingredientMap={ingredientMap}
         />
       )}
       ListEmptyComponent={

@@ -1,6 +1,7 @@
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
-import type { Dish } from '../types';
+import type { Dish, Ingredient } from '../types';
 import { colors } from '../theme/colors';
+import { computeNutritionPerServing } from '../features/feed/scoring';
 import DISH_IMAGES from './dish-images';
 import ICON_IMAGES from './icon-images';
 
@@ -12,6 +13,7 @@ interface DishCardProps {
   onMarkCooked: (dishId: string) => void;
   onToggleShoppingList: (dishId: string) => void;
   onToggleFavorite: (dishId: string) => void;
+  ingredientMap?: Map<string, Ingredient>;
 }
 
 export default function DishCard({
@@ -22,8 +24,10 @@ export default function DishCard({
   onMarkCooked,
   onToggleShoppingList,
   onToggleFavorite,
+  ingredientMap,
 }: DishCardProps) {
   const imageSource = DISH_IMAGES[dish.image_asset];
+  const nutrition = ingredientMap ? computeNutritionPerServing(dish, ingredientMap) : null;
 
   return (
     <View style={styles.card}>
@@ -88,6 +92,25 @@ export default function DishCard({
               </View>
             )}
         </View>
+
+        {nutrition && (
+          <View style={styles.nutritionRow} accessibilityLabel={`Pro Portion: ${Math.round(nutrition.kcal)} Kalorien, ${Math.round(nutrition.protein_g)} Gramm Protein, ${Math.round(nutrition.carbs_g)} Gramm Kohlenhydrate`}>
+            <View style={styles.nutritionItem}>
+              <Text style={styles.nutritionValue}>{Math.round(nutrition.kcal)}</Text>
+              <Text style={styles.nutritionLabel}>kcal</Text>
+            </View>
+            <View style={styles.nutritionDivider} />
+            <View style={styles.nutritionItem}>
+              <Text style={styles.nutritionValue}>{Math.round(nutrition.protein_g)} g</Text>
+              <Text style={styles.nutritionLabel}>Protein</Text>
+            </View>
+            <View style={styles.nutritionDivider} />
+            <View style={styles.nutritionItem}>
+              <Text style={styles.nutritionValue}>{Math.round(nutrition.carbs_g)} g</Text>
+              <Text style={styles.nutritionLabel}>Carbs</Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.actions}>
           <Pressable
@@ -163,6 +186,17 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 14, color: colors.textMuted },
   techniqueTag: { fontSize: 13, color: colors.primary, fontWeight: '500' },
   dietTag: { fontSize: 13, color: colors.textMuted },
+  nutritionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  nutritionItem: { flex: 1, alignItems: 'center', gap: 1 },
+  nutritionValue: { fontSize: 14, fontWeight: '700', color: colors.text },
+  nutritionLabel: { fontSize: 11, color: colors.textMuted },
+  nutritionDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border, marginVertical: 4 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
   shoppingButton: {
     flex: 1,

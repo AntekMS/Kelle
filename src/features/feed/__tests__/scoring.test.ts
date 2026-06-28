@@ -1,5 +1,5 @@
 import type { Dish, Goal, Ingredient, UserProfile } from '../../../types';
-import { scoreDish, rankDishes } from '../scoring';
+import { scoreDish, rankDishes, computeNutritionPerServing } from '../scoring';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -335,5 +335,40 @@ describe('rankDishes', () => {
     const profile = { ...baseProfile, favorites: ['d2'] };
     rankDishes(dishes, profile, [proteinIngredient]);
     expect(dishes[0].id).toBe('d1');
+  });
+});
+
+// ── computeNutritionPerServing ─────────────────────────────────────────────────
+
+describe('computeNutritionPerServing', () => {
+  test('summiert Nährwerte gewichtet nach Menge (pro Portion)', () => {
+    // baseDish: 100 g Hähnchenbrust (165 kcal, 31 g Protein, 0 carbs / 100 g), 1 Portion
+    const n = computeNutritionPerServing(baseDish, ingredientMap);
+    expect(Math.round(n.kcal)).toBe(165);
+    expect(Math.round(n.protein_g)).toBe(31);
+    expect(Math.round(n.carbs_g)).toBe(0);
+  });
+
+  test('teilt durch serving_base', () => {
+    const twoServings: Dish = { ...baseDish, serving_base: 2 };
+    const n = computeNutritionPerServing(twoServings, ingredientMap);
+    expect(Math.round(n.kcal)).toBe(83);
+    expect(Math.round(n.protein_g * 10) / 10).toBe(15.5);
+  });
+
+  test('konvertiert Einheiten (stueck) vor der Berechnung', () => {
+    // 1 stueck Hähnchenbrust = 150 g → 1,5× der 100-g-Werte
+    const stueckDish: Dish = {
+      ...baseDish,
+      ingredients: [{ ingredient_id: 'ing_protein', amount: 1, unit: 'stueck' }],
+    };
+    const n = computeNutritionPerServing(stueckDish, ingredientMap);
+    expect(Math.round(n.kcal)).toBe(248); // 165 * 1.5
+  });
+
+  test('unbekannte Zutat wird übersprungen, kein Crash', () => {
+    const n = computeNutritionPerServing(baseDish, new Map());
+    expect(n.kcal).toBe(0);
+    expect(n.protein_g).toBe(0);
   });
 });

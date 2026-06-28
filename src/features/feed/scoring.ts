@@ -32,13 +32,13 @@ function scoreMachbarkeit(dish: Dish, profile: UserProfile): number {
 // ── Nährwerte pro Portion ──────────────────────────────────────────────────
 // Needed for ziel_fit. Sums ingredient nutrients weighted by amount.
 
-interface NutritionPerServing {
+export interface NutritionPerServing {
   kcal: number;
   protein_g: number;
   carbs_g: number;
 }
 
-function computeNutritionPerServing(
+export function computeNutritionPerServing(
   dish: Dish,
   ingredientMap: Map<string, Ingredient>
 ): NutritionPerServing {

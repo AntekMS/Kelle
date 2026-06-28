@@ -227,7 +227,7 @@ export default function FeedScreen() {
     );
   }
 
-  const { rankedDishes, profile, listDishIds, usingOfflineData } = state;
+  const { rankedDishes, profile, listDishIds, usingOfflineData, ingredientMap } = state;
 
   const listBanner =
     listDishIds.size > 0 ? (
@@ -276,6 +276,7 @@ export default function FeedScreen() {
           onMarkCooked={handleMarkCooked}
           onToggleShoppingList={handleToggleShoppingList}
           onToggleFavorite={handleToggleFavorite}
+          ingredientMap={ingredientMap}
         />
       )}
       ListEmptyComponent={
