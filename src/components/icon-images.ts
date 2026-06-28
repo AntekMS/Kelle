@@ -13,6 +13,8 @@ const ICON_IMAGES: Record<string, ImageSourcePropType> = {
   // Navigation
   // TODO: ersetzen durch assets/icons/icon_settings.png wenn verfügbar
   settings:        require('../../assets/icons/icon_technique.png'),
+  // TODO: ersetzen durch assets/icons/icon_cart.png (Warenkorb/Einkaufskorb) wenn verfügbar
+  shopping:        require('../../assets/icons/icon_check.png'),
 
   // Metadaten auf Gericht-Cards
   time:            require('../../assets/icons/icon_time.png'),

@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Dish, Ingredient, UserProfile } from '../../types';
+import type { FavoritesStackParamList } from '../../navigation/types';
 import {
   initDatabase,
   getAllDishes,
@@ -30,6 +32,7 @@ type FavState =
 export default function FavoritesScreen() {
   const [state, setState] = useState<FavState>({ status: 'loading' });
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<FavoritesStackParamList>>();
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -146,6 +149,7 @@ export default function FavoritesScreen() {
           onMarkCooked={handleMarkCooked}
           onToggleShoppingList={handleToggleShoppingList}
           onToggleFavorite={handleToggleFavorite}
+          onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
           ingredientMap={ingredientMap}
         />
       )}

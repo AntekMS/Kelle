@@ -43,8 +43,10 @@ src/
     supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars) — NULL wenn env fehlt (Offline-Fallback statt Crash)
     units.ts        # normalizeToBase(amount, unit, ing) — EINZIGE Quelle der Einheiten-Konversion
                     #   genutzt von database.ts (Einkaufsliste) UND scoring.ts (Nährwerte)
+                    # formatShoppingAmount(amountBase, ing) — Anzeige-Formatierung der Einkaufsliste:
+                    #   zählbare Zutaten (stueck-Konversion) → "n Stück", sonst g/ml bzw. kg/l ab 1000
     __tests__/
-      units.test.ts # 4 Tests: Konversion, Passthrough, unbekannte Einheit als Basiseinheit
+      units.test.ts # 9 Tests: normalizeToBase + formatShoppingAmount (Stück/kg/l/Fallback)
     policy.ts       # CURRENT_POLICY_VERSION Konstante — importiert in ConsentScreen, SettingsScreen, DatenschutzScreen, App.tsx
   store/
     profile-store.ts # SecureStore CRUD: loadProfile, saveProfile, deleteProfile, hasGrantedConsent
@@ -57,7 +59,9 @@ src/
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
                       # State: listDishIds + activeIngredientIds für overlap-Bonus + usingOfflineData
-                      # Header-Banner bei nicht-leerer Liste → navigiert zu ShoppingList (FeedStack)
+                      # Suchfeld (TextInput über FlatList) → client-seitiger Name-Filter auf rankedDishes
+                      # Header-Banner bei nicht-leerer Liste → cross-tab zu ShoppingTab (getParent)
+                      # DishCard onPress → navigate DishDetail; ingredientMap an DishCard (Nährwerte)
                       # Offline-Banner wenn Cloud-Fetch fehlschlägt oder leer (usingOfflineData)
                       # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
                       # useFocusEffect → refreshListState() beim Tab-Wechsel (kein Cloud-Refetch)
@@ -65,8 +69,10 @@ src/
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
                       # machbarkeit zählt NEUE Techniken aus techniques_required ∪ {technique_taught}
                       #   minus profile.skill_techniques (countNewTechniques, exportiert)
+                      # computeNutritionPerServing(dish, ingredientMap) exportiert — kcal/Protein/Carbs
+                      #   pro Portion; genutzt von ziel_fit, DishCard und DishDetailScreen
       __tests__/
-        scoring.test.ts  # 27 Tests: scoreDish + rankDishes, inkl. techniques_required-Machbarkeit
+        scoring.test.ts  # 32 Tests: scoreDish + rankDishes + computeNutritionPerServing
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
@@ -75,7 +81,13 @@ src/
                            # Kein Scoring/Ranking — zeigt alle Favoriten ungefiltert
                            # useFocusEffect → vollständiger Reload beim Tab-Wechsel (SQLite-only)
     shopping/
-      ShoppingListScreen.tsx  # Multi-Dish-Liste; Gerichte-Card + Zutaten gruppiert nach aisle_category
+      ShoppingListScreen.tsx  # Eigener Tab (ShoppingStack); Gerichte-Card mit Thumbnail + antippbar → DishDetail
+                              # Zutaten gruppiert nach aisle_category; Mengen via formatShoppingAmount
+                              # useFocusEffect → Reload beim Tab-Fokus; "Leeren" lädt neu (kein goBack)
+    dish/
+      DishDetailScreen.tsx    # Rezept-Screen (Param dishId): Hero, Nährwerte, Zutaten (Originalmengen),
+                              # nummerierte Schritte, "+ Zur Einkaufsliste"-Toggle
+                              # in FeedStack, FavStack und ShoppingStack registriert
     settings/
       SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export via Share, Löschen) + Links zu Datenschutz/Impressum
                               # Löschen → deleteProfile() + clearAllUserData() (SecureStore + SQLite)
@@ -84,21 +96,27 @@ src/
       ImpressumScreen.tsx     # §5 DDG Impressum — Kontaktdaten noch Platzhalter
   components/
     DishCard.tsx      # technique_taught, diet_verified, time_minutes, Herz-Favorit, Shopping-Toggle
-                      # Hero-Image: height: 180 (fest), resizeMode: cover
+                      # Nährwert-Zeile (kcal/Protein/Carbs pro Portion) wenn ingredientMap übergeben
+                      # Hero-Image + Name antippbar via onPress (→ DishDetail); height: 180 (fest)
                       # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
     dish-images.ts    # Statische Require-Map: image_asset-Name → JPG in assets/
     icon-images.ts    # Statische Require-Map: Icon-Name → PNG in assets/icons/
                       # 'settings' → icon_technique.png (Platzhalter bis icon_settings.png verfügbar)
+                      # 'shopping' → icon_check.png (Platzhalter bis icon_cart.png verfügbar)
   navigation/
     AppContext.ts           # AppContextValue: onConsentGranted, onDeleteProfile
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
     OnboardingNavigator.tsx # Bindet alle 7 Screens + OnboardingProvider ein
-    MainNavigator.tsx       # Bottom-Tab-Navigator (3 Tabs) + nested Stacks:
-                            #   FeedTab: FeedStack (Feed → ShoppingList)
-                            #   FavoritesTab: FavStack (Favorites)
+    MainNavigator.tsx       # Bottom-Tab-Navigator (4 Tabs) + nested Stacks:
+                            #   FeedTab: FeedStack (Feed → DishDetail)
+                            #   FavoritesTab: FavStack (Favorites → DishDetail)
+                            #   ShoppingTab: ShoppingStack (ShoppingList → DishDetail)
                             #   SettingsTab: SettingsStack (Settings → Datenschutz → Impressum)
+                            #   DishDetail in 3 Stacks registriert (Param { dishId })
+                            #   Feed-Banner navigiert cross-tab via getParent() → ShoppingTab
     types.ts                # OnboardingStackParamList
-                            # FeedStackParamList, FavoritesStackParamList, SettingsStackParamList
+                            # FeedStackParamList, FavoritesStackParamList,
+                            #   ShoppingStackParamList, SettingsStackParamList
                             # MainTabParamList
 ```
 
@@ -176,7 +194,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 - `normalizeToBase(amount, unit, ingredient)` — konvertiert in base_unit (g/ml); lebt in `lib/units.ts`, hier re-exportiert
 - Mutationen (`addDishToList`, `removeDishFromList`, `clearActiveShoppingList`, `clearAllUserData`) laufen je in einer `withTransactionAsync`
 - `recalculateItems()` — aggregiert Mengen, bewahrt is_checked-Zustand
-- `formatAmount(amountBase, baseUnit)` in ShoppingListScreen — zeigt kg/l ab 1000
+- `formatShoppingAmount(amountBase, ingredient)` aus `lib/units` — zählbare Zutaten als „n Stück", sonst kg/l ab 1000
 
 ## Einwilligung (Art. 9)
 
@@ -200,7 +218,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Feed-Screen (Pipeline) | ✅ done |
 | Shopping-Liste (multi-dish, base_unit-Normalisierung) | ✅ done |
 | Favoriten-Screen (FavoritesScreen) | ✅ done — eigener Tab, Herz-Toggle entfernt Gericht direkt |
-| Bottom-Tab-Navigation (Issue #2) | ✅ done — Entdecken / Favoriten / Einstellungen |
+| Bottom-Tab-Navigation (Issue #2) | ✅ done — Entdecken / Favoriten / Einkauf / Einstellungen (4 Tabs) |
 | Bilder-Größe repariert (Issue #1) | ✅ done — DishCard heroImage height: 180 |
 | Settings + DSGVO-Betroffenenrechte | ✅ done |
 | Datenschutzerklärung + Impressum | ✅ done — Kontaktdaten sind noch Platzhalter |
@@ -209,7 +227,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 89 Tests grün (scoring, profile-store, database, allergen-filter, units) |
+| Test-Suite | ✅ 98 Tests grün (scoring, profile-store, database, allergen-filter, units) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
@@ -217,6 +235,10 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Policy-Version-Konstante (Issue #20) | ✅ done — src/lib/policy.ts; App.tsx prüft Policy-Version bei Start |
 | Küchengeräte-Filter (Issue #10) | ✅ done — im Simulator verifiziert (28.06.2026) |
 | Code-Review-Fixes (28.06.2026) | ✅ done — DSGVO-Vollständige-Löschung (clearAllUserData), Machbarkeit zählt techniques_required, geteiltes lib/units, Shopping-Mutationen transaktional, Supabase null-safe, Export via Share |
+| Eier/zählbare Zutaten als Stück (Issue #14) | ✅ done — formatShoppingAmount (Anzeige-Schicht) |
+| Nährwerte auf DishCard (Issue #7) | ✅ done — computeNutritionPerServing exportiert |
+| Suchfeld im Feed (Issue #22) | ✅ done — client-seitiger Name-Filter |
+| Einkaufslisten-UX (Issue #8) | ✅ done — 4. Tab, DishDetailScreen, Thumbnails, Gewürz-Kategorien konsistent (Bundled + Supabase) |
 
 ## Design-System
 
@@ -236,6 +258,8 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 ## Noch offen
 
 - **icon_settings.png**: Fehlt noch in `assets/icons/` — aktuell Platzhalter `icon_technique.png`. Monochromes Gear-Icon (512×512 PNG) ablegen und `icon-images.ts` `settings`-Key anpassen.
+- **icon_cart.png**: Fehlt noch in `assets/icons/` — Einkauf-Tab nutzt Platzhalter `icon_check.png`. Monochromes Warenkorb-Icon (512×512 PNG) ablegen und `icon-images.ts` `shopping`-Key anpassen.
+- **Supabase-Hosting-Region**: Projekt liegt in `ap-south-1` (Mumbai), NICHT EU. DatenschutzScreen behauptet „EU-Hosting" → vor Release korrigieren (nur Katalogdaten, keine Art.-9-Daten in der Cloud, aber Aussage muss stimmen).
 - **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release)
 - **Ratings**: Phase 2 — benötigt Cloud-Aggregation
 - **Cloud-Accounts + Login** (Issues #4, #5): v2.0 — nur nicht-sensible Daten (`favorites`, `cooked_dish_ids`) dürfen in die Cloud; `allergies`/`diet`/`consent` bleiben lokal (DSGVO Art. 9)
@@ -245,7 +269,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 ```bash
 npx expo start          # Dev-Server
 npx expo start --ios    # iOS-Simulator
-npx jest                # Tests (74 grün)
+npx jest                # Tests (98 grün)
 npx tsc --noEmit        # Typcheck (0 Fehler)
 ```
 

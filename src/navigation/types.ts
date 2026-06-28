@@ -12,11 +12,17 @@ export type OnboardingStackParamList = {
 
 export type FeedStackParamList = {
   Feed: undefined;
-  ShoppingList: undefined;
+  DishDetail: { dishId: string };
 };
 
 export type FavoritesStackParamList = {
   Favorites: undefined;
+  DishDetail: { dishId: string };
+};
+
+export type ShoppingStackParamList = {
+  ShoppingList: undefined;
+  DishDetail: { dishId: string };
 };
 
 export type SettingsStackParamList = {
@@ -28,5 +34,6 @@ export type SettingsStackParamList = {
 export type MainTabParamList = {
   FeedTab: undefined;
   FavoritesTab: undefined;
+  ShoppingTab: undefined;
   SettingsTab: undefined;
 };

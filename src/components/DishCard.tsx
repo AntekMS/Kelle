@@ -13,6 +13,7 @@ interface DishCardProps {
   onMarkCooked: (dishId: string) => void;
   onToggleShoppingList: (dishId: string) => void;
   onToggleFavorite: (dishId: string) => void;
+  onPress?: (dishId: string) => void;
   ingredientMap?: Map<string, Ingredient>;
 }
 
@@ -24,6 +25,7 @@ export default function DishCard({
   onMarkCooked,
   onToggleShoppingList,
   onToggleFavorite,
+  onPress,
   ingredientMap,
 }: DishCardProps) {
   const imageSource = DISH_IMAGES[dish.image_asset];
@@ -32,16 +34,28 @@ export default function DishCard({
   return (
     <View style={styles.card}>
       {imageSource && (
-        <Image
-          source={imageSource}
-          style={styles.heroImage}
-          resizeMode="cover"
-          accessibilityLabel={dish.name}
-        />
+        <Pressable
+          onPress={onPress ? () => onPress(dish.id) : undefined}
+          accessibilityLabel={`${dish.name} – Rezept öffnen`}
+          accessibilityRole="button"
+        >
+          <Image
+            source={imageSource}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+        </Pressable>
       )}
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.name}>{dish.name}</Text>
+          <Pressable
+            style={styles.nameWrap}
+            onPress={onPress ? () => onPress(dish.id) : undefined}
+            accessibilityLabel={`${dish.name} – Rezept öffnen`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.name}>{dish.name}</Text>
+          </Pressable>
           <Pressable
             onPress={() => onToggleFavorite(dish.id)}
             hitSlop={8}
@@ -174,7 +188,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  name: { fontSize: 18, fontFamily: 'Spectral_600SemiBold', color: colors.text, flex: 1 },
+  nameWrap: { flex: 1 },
+  name: { fontSize: 18, fontFamily: 'Spectral_600SemiBold', color: colors.text },
   heartIcon: { width: 22, height: 22, tintColor: colors.primary },
   cookedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cookedBadgeText: { fontSize: 13, color: colors.secondary, fontWeight: '600' },

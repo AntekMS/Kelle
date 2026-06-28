@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,11 @@ import {
   Alert,
 } from 'react-native';
 import ICON_IMAGES from '../../components/icon-images';
+import DISH_IMAGES from '../../components/dish-images';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { FeedStackParamList } from '../../navigation/types';
+import type { ShoppingStackParamList } from '../../navigation/types';
 import type { ShoppingItem, ShoppingList } from '../../types';
 import {
   getActiveShoppingList,
@@ -20,11 +22,12 @@ import {
   clearActiveShoppingList,
   removeDishFromList,
   getAllIngredients,
+  getAllDishes,
 } from '../../db/database';
 import { colors } from '../../theme/colors';
 import { formatShoppingAmount } from '../../lib/units';
 
-type Props = NativeStackScreenProps<FeedStackParamList, 'ShoppingList'>;
+type Props = NativeStackScreenProps<ShoppingStackParamList, 'ShoppingList'>;
 
 type Section = { title: string; isPantry: boolean; data: ShoppingItem[] };
 
@@ -34,19 +37,22 @@ export default function ShoppingListScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [ingredientMap, setIngredientMap] =
     useState<Map<string, import('../../types').Ingredient>>(new Map());
+  const [dishImages, setDishImages] = useState<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [active, allIngredients] = await Promise.all([
+    const [active, allIngredients, allDishes] = await Promise.all([
       getActiveShoppingList(),
       getAllIngredients(),
+      getAllDishes(),
     ]);
     setIngredientMap(new Map(allIngredients.map((i) => [i.id, i])));
+    setDishImages(new Map(allDishes.map((d) => [d.id, d.image_asset])));
     setList(active);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function handleToggle(itemId: string) {
     await toggleShoppingItem(itemId);
@@ -90,7 +96,7 @@ export default function ShoppingListScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             await clearActiveShoppingList();
-            navigation.goBack();
+            await load();
           },
         },
       ]
@@ -148,18 +154,30 @@ export default function ShoppingListScreen({ navigation }: Props) {
         <View>
           <View style={styles.dishesCard}>
             <Text style={styles.dishesLabel}>Für diese Gerichte:</Text>
-            {list.dishes.map((d) => (
-              <View key={d.dish_id} style={styles.dishRow}>
-                <Text style={styles.dishName}>{d.dish_name}</Text>
-                <Pressable
-                  onPress={() => handleRemoveDish(d.dish_id, d.dish_name)}
-                  hitSlop={8}
-                  accessibilityLabel={`${d.dish_name} entfernen`}
-                >
-                  <Image source={ICON_IMAGES.close} style={styles.removeIcon} resizeMode="contain" />
-                </Pressable>
-              </View>
-            ))}
+            {list.dishes.map((d) => {
+              const imageAsset = dishImages.get(d.dish_id);
+              const thumb = imageAsset ? DISH_IMAGES[imageAsset] : undefined;
+              return (
+                <View key={d.dish_id} style={styles.dishRow}>
+                  <Pressable
+                    style={styles.dishInfo}
+                    onPress={() => navigation.navigate('DishDetail', { dishId: d.dish_id })}
+                    accessibilityLabel={`${d.dish_name} – Rezept öffnen`}
+                    accessibilityRole="button"
+                  >
+                    {thumb && <Image source={thumb} style={styles.dishThumb} resizeMode="cover" />}
+                    <Text style={styles.dishName}>{d.dish_name}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRemoveDish(d.dish_id, d.dish_name)}
+                    hitSlop={8}
+                    accessibilityLabel={`${d.dish_name} entfernen`}
+                  >
+                    <Image source={ICON_IMAGES.close} style={styles.removeIcon} resizeMode="contain" />
+                  </Pressable>
+                </View>
+              );
+            })}
           </View>
 
           <View style={styles.progressRow}>
@@ -224,6 +242,8 @@ const styles = StyleSheet.create({
   },
   dishesLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   dishRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dishInfo: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  dishThumb: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.surfaceAlt },
   dishName: { fontSize: 15, color: colors.text, fontWeight: '500', flex: 1 },
   removeIcon: { width: 16, height: 16, tintColor: colors.disabled, marginLeft: 8 },
   progressRow: {

@@ -142,7 +142,7 @@ export const INGREDIENTS: Ingredient[] = [
     base_unit: 'g',
     unit_conversions: { tl: 2.5 },
     aisle_category: 'Gewürze',
-    is_pantry_staple: false,
+    is_pantry_staple: true,
     animal_origin: 'none',
   },
   {
@@ -296,7 +296,7 @@ export const INGREDIENTS: Ingredient[] = [
     base_unit: 'ml',
     unit_conversions: { el: 15 },
     aisle_category: 'Gewürze',
-    is_pantry_staple: false,
+    is_pantry_staple: true,
     animal_origin: 'none',
   },
   {
@@ -362,7 +362,7 @@ export const INGREDIENTS: Ingredient[] = [
     base_unit: 'g',
     unit_conversions: { tl: 2.5 },
     aisle_category: 'Gewürze',
-    is_pantry_staple: false,
+    is_pantry_staple: true,
     animal_origin: 'none',
   },
 ];

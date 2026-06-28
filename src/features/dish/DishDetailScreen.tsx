@@ -1,0 +1,266 @@
+import { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute, type RouteProp } from '@react-navigation/native';
+import type { Dish, DishIngredient, Ingredient } from '../../types';
+import {
+  getDishById,
+  getAllIngredients,
+  getActiveDishIds,
+  addDishToList,
+  removeDishFromList,
+} from '../../db/database';
+import { computeNutritionPerServing } from '../feed/scoring';
+import { colors } from '../../theme/colors';
+import DISH_IMAGES from '../../components/dish-images';
+import ICON_IMAGES from '../../components/icon-images';
+
+type DishDetailRoute = RouteProp<{ DishDetail: { dishId: string } }, 'DishDetail'>;
+
+const UNIT_LABELS: Record<string, string> = {
+  g: 'g',
+  ml: 'ml',
+  stueck: 'Stück',
+  el: 'EL',
+  tl: 'TL',
+};
+
+function formatIngredientAmount(di: DishIngredient): string {
+  const label = UNIT_LABELS[di.unit] ?? di.unit;
+  return `${di.amount} ${label}`;
+}
+
+export default function DishDetailScreen() {
+  const route = useRoute<DishDetailRoute>();
+  const { dishId } = route.params;
+  const insets = useSafeAreaInsets();
+
+  const [dish, setDish] = useState<Dish | null>(null);
+  const [ingredientMap, setIngredientMap] = useState<Map<string, Ingredient>>(new Map());
+  const [inList, setInList] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const [loadedDish, allIngredients, activeIds] = await Promise.all([
+      getDishById(dishId),
+      getAllIngredients(),
+      getActiveDishIds(),
+    ]);
+    setDish(loadedDish);
+    setIngredientMap(new Map(allIngredients.map((i) => [i.id, i])));
+    setInList(activeIds.includes(dishId));
+    setLoading(false);
+  }, [dishId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleToggleList() {
+    if (!dish) return;
+    if (inList) {
+      await removeDishFromList(dish.id, ingredientMap);
+      setInList(false);
+    } else {
+      await addDishToList(dish, ingredientMap);
+      setInList(true);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!dish) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.emptyTitle}>Gericht nicht gefunden</Text>
+      </View>
+    );
+  }
+
+  const imageSource = DISH_IMAGES[dish.image_asset];
+  const nutrition = computeNutritionPerServing(dish, ingredientMap);
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+    >
+      {imageSource && (
+        <Image source={imageSource} style={styles.hero} resizeMode="cover" accessibilityLabel={dish.name} />
+      )}
+
+      <View style={styles.body}>
+        <Text style={styles.name}>{dish.name}</Text>
+        {!!dish.description && <Text style={styles.description}>{dish.description}</Text>}
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Image source={ICON_IMAGES.time} style={styles.metaIcon} resizeMode="contain" />
+            <Text style={styles.metaText}>{dish.time_minutes} Min.</Text>
+          </View>
+          {!!dish.technique_taught && (
+            <View style={styles.metaItem}>
+              <Image source={ICON_IMAGES.technique} style={styles.metaIcon} resizeMode="contain" />
+              <Text style={styles.techniqueTag}>{dish.technique_taught}</Text>
+            </View>
+          )}
+          {dish.diet_verified.includes('vegan') && (
+            <View style={styles.metaItem}>
+              <Image source={ICON_IMAGES.vegan} style={styles.metaIcon} resizeMode="contain" />
+              <Text style={styles.dietTag}>Vegan</Text>
+            </View>
+          )}
+          {!dish.diet_verified.includes('vegan') && dish.diet_verified.includes('vegetarian') && (
+            <View style={styles.metaItem}>
+              <Image source={ICON_IMAGES.vegetarisch} style={styles.metaIcon} resizeMode="contain" />
+              <Text style={styles.dietTag}>Vegetarisch</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.nutritionRow} accessibilityLabel={`Pro Portion: ${Math.round(nutrition.kcal)} Kalorien, ${Math.round(nutrition.protein_g)} Gramm Protein, ${Math.round(nutrition.carbs_g)} Gramm Kohlenhydrate`}>
+          <View style={styles.nutritionItem}>
+            <Text style={styles.nutritionValue}>{Math.round(nutrition.kcal)}</Text>
+            <Text style={styles.nutritionLabel}>kcal</Text>
+          </View>
+          <View style={styles.nutritionDivider} />
+          <View style={styles.nutritionItem}>
+            <Text style={styles.nutritionValue}>{Math.round(nutrition.protein_g)} g</Text>
+            <Text style={styles.nutritionLabel}>Protein</Text>
+          </View>
+          <View style={styles.nutritionDivider} />
+          <View style={styles.nutritionItem}>
+            <Text style={styles.nutritionValue}>{Math.round(nutrition.carbs_g)} g</Text>
+            <Text style={styles.nutritionLabel}>Carbs</Text>
+          </View>
+        </View>
+
+        <Pressable
+          style={[styles.listButton, inList && styles.listButtonActive]}
+          onPress={handleToggleList}
+          accessibilityLabel={inList ? 'Aus Einkaufsliste entfernen' : 'Zur Einkaufsliste hinzufügen'}
+        >
+          {inList && (
+            <Image source={ICON_IMAGES.check} style={styles.listButtonIcon} resizeMode="contain" />
+          )}
+          <Text style={[styles.listButtonText, inList && styles.listButtonTextActive]}>
+            {inList ? 'In der Liste' : '+ Zur Einkaufsliste'}
+          </Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>Zutaten</Text>
+        <Text style={styles.servingHint}>für {dish.serving_base} {dish.serving_base === 1 ? 'Portion' : 'Portionen'}</Text>
+        <View style={styles.ingredientList}>
+          {dish.ingredients.map((di) => {
+            const ing = ingredientMap.get(di.ingredient_id);
+            return (
+              <View key={di.ingredient_id} style={styles.ingredientRow}>
+                <Text style={styles.ingredientName}>{ing?.name ?? di.ingredient_id}</Text>
+                <Text style={styles.ingredientAmount}>{formatIngredientAmount(di)}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        <Text style={styles.sectionTitle}>Zubereitung</Text>
+        <View style={styles.steps}>
+          {dish.steps.map((step, index) => (
+            <View key={index} style={styles.stepRow}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>{index + 1}</Text>
+              </View>
+              <Text style={styles.stepText}>{step}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  hero: { width: '100%', height: 220 },
+  body: { padding: 20, gap: 12 },
+  name: { fontSize: 24, fontFamily: 'Spectral_700Bold', color: colors.text },
+  description: { fontSize: 15, color: colors.textMuted, lineHeight: 22 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaIcon: { width: 15, height: 15, tintColor: colors.textMuted },
+  metaText: { fontSize: 14, color: colors.textMuted },
+  techniqueTag: { fontSize: 14, color: colors.primary, fontWeight: '500' },
+  dietTag: { fontSize: 14, color: colors.textMuted },
+  nutritionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  nutritionItem: { flex: 1, alignItems: 'center', gap: 2 },
+  nutritionValue: { fontSize: 16, fontWeight: '700', color: colors.text },
+  nutritionLabel: { fontSize: 12, color: colors.textMuted },
+  nutritionDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border, marginVertical: 6 },
+  listButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  listButtonActive: { backgroundColor: colors.primary },
+  listButtonIcon: { width: 16, height: 16, tintColor: colors.surface },
+  listButtonText: { fontSize: 15, fontWeight: '600', color: colors.primary },
+  listButtonTextActive: { color: colors.surface },
+  sectionTitle: { fontSize: 18, fontFamily: 'Spectral_600SemiBold', color: colors.text, marginTop: 12 },
+  servingHint: { fontSize: 13, color: colors.textMuted, marginTop: -8 },
+  ingredientList: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  ingredientName: { fontSize: 15, color: colors.text, flex: 1 },
+  ingredientAmount: { fontSize: 15, color: colors.textMuted, marginLeft: 12 },
+  steps: { gap: 14 },
+  stepRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  stepNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumberText: { color: colors.surface, fontSize: 14, fontWeight: '700' },
+  stepText: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 22 },
+});

@@ -12,8 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { Dish, Ingredient, UserProfile } from '../../types';
-import type { FeedStackParamList } from '../../navigation/types';
+import type { FeedStackParamList, MainTabParamList } from '../../navigation/types';
 import { DISHES } from '../../data/dishes';
 import { INGREDIENTS } from '../../data/ingredients';
 import {
@@ -240,7 +241,7 @@ export default function FeedScreen() {
     listDishIds.size > 0 ? (
       <Pressable
         style={styles.listBanner}
-        onPress={() => navigation.navigate('ShoppingList')}
+        onPress={() => navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('ShoppingTab')}
         accessibilityLabel={`Einkaufsliste öffnen, ${listDishIds.size} ${listDishIds.size === 1 ? 'Gericht' : 'Gerichte'}`}
       >
         <Text style={styles.listBannerText}>
@@ -298,6 +299,7 @@ export default function FeedScreen() {
           onMarkCooked={handleMarkCooked}
           onToggleShoppingList={handleToggleShoppingList}
           onToggleFavorite={handleToggleFavorite}
+          onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
           ingredientMap={ingredientMap}
         />
       )}

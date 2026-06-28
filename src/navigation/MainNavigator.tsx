@@ -5,11 +5,13 @@ import type {
   MainTabParamList,
   FeedStackParamList,
   FavoritesStackParamList,
+  ShoppingStackParamList,
   SettingsStackParamList,
 } from './types';
 import FeedScreen from '../features/feed/FeedScreen';
 import ShoppingListScreen from '../features/shopping/ShoppingListScreen';
 import FavoritesScreen from '../features/favorites/FavoritesScreen';
+import DishDetailScreen from '../features/dish/DishDetailScreen';
 import SettingsScreen from '../features/settings/SettingsScreen';
 import DatenschutzScreen from '../features/legal/DatenschutzScreen';
 import ImpressumScreen from '../features/legal/ImpressumScreen';
@@ -19,13 +21,14 @@ import { colors } from '../theme/colors';
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
 const FavStack = createNativeStackNavigator<FavoritesStackParamList>();
+const ShoppingStack = createNativeStackNavigator<ShoppingStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 function FeedNavigator() {
   return (
     <FeedStack.Navigator>
       <FeedStack.Screen name="Feed" component={FeedScreen} options={{ title: 'Küchen-Coach' }} />
-      <FeedStack.Screen name="ShoppingList" component={ShoppingListScreen} options={{ title: 'Einkaufsliste' }} />
+      <FeedStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
     </FeedStack.Navigator>
   );
 }
@@ -34,7 +37,17 @@ function FavoritesNavigator() {
   return (
     <FavStack.Navigator>
       <FavStack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Favoriten' }} />
+      <FavStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
     </FavStack.Navigator>
+  );
+}
+
+function ShoppingNavigator() {
+  return (
+    <ShoppingStack.Navigator>
+      <ShoppingStack.Screen name="ShoppingList" component={ShoppingListScreen} options={{ title: 'Einkaufsliste' }} />
+      <ShoppingStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
+    </ShoppingStack.Navigator>
   );
 }
 
@@ -82,6 +95,14 @@ export default function MainNavigator() {
               resizeMode="contain"
             />
           ),
+        }}
+      />
+      <Tab.Screen
+        name="ShoppingTab"
+        component={ShoppingNavigator}
+        options={{
+          title: 'Einkauf',
+          tabBarIcon: ({ color }) => <TabIcon iconKey="shopping" color={color} />,
         }}
       />
       <Tab.Screen
