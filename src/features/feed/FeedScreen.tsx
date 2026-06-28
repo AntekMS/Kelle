@@ -158,6 +158,7 @@ export default function FeedScreen() {
   async function handleMarkCooked(dishId: string) {
     if (state.status !== 'ready') return;
     const { safeDishes, ingredients, ingredientMap, profile, listDishIds, activeIngredientIds } = state;
+    if (profile.cooked_dish_ids.includes(dishId)) return; // already cooked — keep idempotent
 
     await markDishCooked(dishId);
     const updated: UserProfile = {

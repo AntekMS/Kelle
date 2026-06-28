@@ -1,8 +1,9 @@
-import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Alert, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { SettingsStackParamList } from '../../navigation/types';
 import { loadProfile, deleteProfile } from '../../store/profile-store';
+import { clearAllUserData } from '../../db/database';
 import { useAppContext } from '../../navigation/AppContext';
 import { CURRENT_POLICY_VERSION } from '../../lib/policy';
 import { colors } from '../../theme/colors';
@@ -19,11 +20,14 @@ export default function SettingsScreen({ navigation }: Props) {
       Alert.alert('Keine Daten', 'Es sind keine gespeicherten Daten vorhanden.');
       return;
     }
-    Alert.alert(
-      'Meine Daten (JSON)',
-      JSON.stringify(profile, null, 2),
-      [{ text: 'Schließen' }]
-    );
+    const json = JSON.stringify(profile, null, 2);
+    // Share sheet keeps the full payload intact (Alert truncates large JSON on Android)
+    // and lets the user actually take their data with them (Art. 20 DSGVO).
+    try {
+      await Share.share({ message: json });
+    } catch {
+      Alert.alert('Meine Daten (JSON)', json, [{ text: 'Schließen' }]);
+    }
   }
 
   function handleDeletePress() {
@@ -37,6 +41,7 @@ export default function SettingsScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             await deleteProfile();
+            await clearAllUserData();
             onDeleteProfile();
           },
         },

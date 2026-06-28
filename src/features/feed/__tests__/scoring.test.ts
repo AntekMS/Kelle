@@ -89,6 +89,65 @@ describe('scoreDish — Machbarkeit', () => {
   });
 });
 
+// ── scoreDish: Machbarkeit über techniques_required ──────────────────────────
+
+describe('scoreDish — Machbarkeit zählt techniques_required', () => {
+  // Dish that demands real prerequisite techniques on top of the one it teaches.
+  const multiTechDish: Dish = {
+    ...baseDish,
+    id: 'd_multi',
+    techniques_required: ['niedrige-hitze', 'aromatisieren'],
+    technique_taught: 'sauce',
+  };
+
+  test('Anfänger (kein Können) → 3 neue Techniken → Faktor 0.1', () => {
+    const profile = { ...baseProfile, goals: ['none'] as Goal[], skill_techniques: [] };
+    // involved = {niedrige-hitze, aromatisieren, sauce} → 3 neu → 0.1
+    const score = scoreDish(multiTechDish, profile, ingredientMap);
+    expect(score).toBeCloseTo(0.1);
+  });
+
+  test('2 neue Techniken → Faktor 0.4', () => {
+    // user already knows the taught technique, so only the 2 required ones are new
+    const profile = { ...baseProfile, goals: ['none'] as Goal[], skill_techniques: ['sauce'] };
+    const score = scoreDish(multiTechDish, profile, ingredientMap);
+    expect(score).toBeCloseTo(0.4);
+  });
+
+  test('bekannte Vorkenntnisse senken die Anzahl neuer Techniken', () => {
+    // knows 2 of 3 → only 1 new → 1.0
+    const profile = {
+      ...baseProfile,
+      goals: ['none'] as Goal[],
+      skill_techniques: ['niedrige-hitze', 'aromatisieren'],
+    };
+    const score = scoreDish(multiTechDish, profile, ingredientMap);
+    expect(score).toBeCloseTo(1.0);
+  });
+
+  test('alle Techniken bekannt → 0 neu → Faktor 0.8', () => {
+    const profile = {
+      ...baseProfile,
+      goals: ['none'] as Goal[],
+      skill_techniques: ['niedrige-hitze', 'aromatisieren', 'sauce'],
+    };
+    const score = scoreDish(multiTechDish, profile, ingredientMap);
+    expect(score).toBeCloseTo(0.8);
+  });
+
+  test('Anfänger wird ein anspruchsvolles Gericht NICHT vor ein einfaches gereiht', () => {
+    const profile = { ...baseProfile, goals: ['none'] as Goal[], skill_techniques: [] };
+    const simpleDish: Dish = {
+      ...baseDish,
+      id: 'd_simple',
+      techniques_required: [],
+      technique_taught: 'kochen',
+    };
+    const ranked = rankDishes([multiTechDish, simpleDish], profile, [proteinIngredient]);
+    expect(ranked[0].id).toBe('d_simple');
+  });
+});
+
 // ── scoreDish: Repetition ─────────────────────────────────────────────────────
 
 describe('scoreDish — Repetition Penalty', () => {

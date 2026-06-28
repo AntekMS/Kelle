@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Dish, Ingredient } from '../types';
 
 export async function fetchDishesFromCloud(): Promise<Dish[]> {
+  if (!supabase) throw new Error('Supabase nicht konfiguriert');
   const { data, error } = await supabase
     .from('dishes')
     .select('data');
@@ -11,6 +12,7 @@ export async function fetchDishesFromCloud(): Promise<Dish[]> {
 }
 
 export async function fetchIngredientsFromCloud(): Promise<Ingredient[]> {
+  if (!supabase) throw new Error('Supabase nicht konfiguriert');
   const { data, error } = await supabase
     .from('ingredients')
     .select('data');

@@ -67,6 +67,7 @@ export default function FavoritesScreen() {
 
   async function handleMarkCooked(dishId: string) {
     if (state.status !== 'ready') return;
+    if (state.profile.cooked_dish_ids.includes(dishId)) return; // already cooked — keep idempotent
     await markDishCooked(dishId);
     const updated: UserProfile = {
       ...state.profile,

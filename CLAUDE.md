@@ -16,6 +16,7 @@ Mobile Lern-App für Kocheinsteiger. Rezept-Katalog kommt aus Supabase (read-onl
 - Vor größeren Änderungen: neuen Git-Branch anlegen.
 - Niemals API-Keys oder Secrets in den Code oder ins Git committen. `.env` ist gitignored.
 - **SQLite**: Niemals zwei Funktionen mit `withTransactionAsync` parallel per `Promise.all` aufrufen — SQLite erlaubt nur eine Transaktion gleichzeitig pro Connection. Stattdessen sequenziell awaiten.
+- Einheiten-Konversion (`amount` → `base_unit`) läuft IMMER über `normalizeToBase` aus `src/lib/units.ts` — NIE inline duplizieren (Scoring und Einkaufsliste müssen identisch normalisieren).
 
 ## Architektur
 
@@ -29,13 +30,21 @@ src/
                     #   getOrCreateActiveList, getActiveDishIds
                     #   addDishToList, removeDishFromList
                     #   getActiveShoppingList, toggleShoppingItem, clearActiveShoppingList
-                    #   normalizeToBase (exportiert — auch von Tests genutzt)
+                    #   clearAllUserData (DSGVO-Löschung: alle Shopping-Tabellen + cooked_history)
+                    #   normalizeToBase (re-exportiert aus lib/units — auch von Tests genutzt)
+                    #   addDishToList/removeDishFromList/clearActiveShoppingList/clearAllUserData
+                    #     kapseln ihre Schreibvorgänge in withTransactionAsync (atomar)
                     #   _resetDbForTests (nur für Tests — setzt SQLite-Singleton zurück)
     __tests__/
-      database.test.ts  # 18 Tests: normalizeToBase, getAllDishes, getOrCreateActiveList etc.
+      database.test.ts  # 25 Tests: normalizeToBase, getAllDishes, Transaktionen, clearAllUserData etc.
     cloud-catalog.ts # Supabase fetch: fetchDishesFromCloud(), fetchIngredientsFromCloud()
+                     #   wirft wenn supabase==null → FeedScreen fällt auf Bundled-Daten zurück
   lib/
-    supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars)
+    supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars) — NULL wenn env fehlt (Offline-Fallback statt Crash)
+    units.ts        # normalizeToBase(amount, unit, ing) — EINZIGE Quelle der Einheiten-Konversion
+                    #   genutzt von database.ts (Einkaufsliste) UND scoring.ts (Nährwerte)
+    __tests__/
+      units.test.ts # 4 Tests: Konversion, Passthrough, unbekannte Einheit als Basiseinheit
     policy.ts       # CURRENT_POLICY_VERSION Konstante — importiert in ConsentScreen, SettingsScreen, DatenschutzScreen, App.tsx
   store/
     profile-store.ts # SecureStore CRUD: loadProfile, saveProfile, deleteProfile, hasGrantedConsent
@@ -54,8 +63,10 @@ src/
                       # useFocusEffect → refreshListState() beim Tab-Wechsel (kein Cloud-Refetch)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
+                      # machbarkeit zählt NEUE Techniken aus techniques_required ∪ {technique_taught}
+                      #   minus profile.skill_techniques (countNewTechniques, exportiert)
       __tests__/
-        scoring.test.ts  # 22 Tests: scoreDish + rankDishes, alle Scoring-Dimensionen
+        scoring.test.ts  # 27 Tests: scoreDish + rankDishes, inkl. techniques_required-Machbarkeit
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
@@ -66,7 +77,8 @@ src/
     shopping/
       ShoppingListScreen.tsx  # Multi-Dish-Liste; Gerichte-Card + Zutaten gruppiert nach aisle_category
     settings/
-      SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export, Löschen) + Links zu Datenschutz/Impressum
+      SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export via Share, Löschen) + Links zu Datenschutz/Impressum
+                              # Löschen → deleteProfile() + clearAllUserData() (SecureStore + SQLite)
     legal/
       DatenschutzScreen.tsx   # Statische Datenschutzerklärung (Art. 13 DSGVO) — Kontaktdaten noch Platzhalter
       ImpressumScreen.tsx     # §5 DDG Impressum — Kontaktdaten noch Platzhalter
@@ -149,7 +161,8 @@ Vier harte Ausschlusskriterien — alle müssen bestanden werden:
 
 ```
 score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
-machbarkeit: neueTekniken=0→0.8, 1→1.0, 2→0.4, 3+→0.1
+machbarkeit: neueTechniken=0→0.8, 1→1.0, 2→0.4, 3+→0.1
+  neueTechniken = (techniques_required ∪ {technique_taught}) \ skill_techniques  (countNewTechniques)
 ziel_fit: [0.7..1.0] basierend auf Nährwerten × Goals
 repetition_penalty: gekochte Gerichte ×0.7
 favBonus: +0.08 wenn Favorit
@@ -160,7 +173,8 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 
 - Singleton-Liste mit `ACTIVE_LIST_ID = 'active'`
 - 4 Tabellen: `shopping_lists`, `shopping_list_dishes`, `shopping_source_items`, `shopping_items`
-- `normalizeToBase(amount, unit, ingredient)` — konvertiert in base_unit (g/ml), exportiert
+- `normalizeToBase(amount, unit, ingredient)` — konvertiert in base_unit (g/ml); lebt in `lib/units.ts`, hier re-exportiert
+- Mutationen (`addDishToList`, `removeDishFromList`, `clearActiveShoppingList`, `clearAllUserData`) laufen je in einer `withTransactionAsync`
 - `recalculateItems()` — aggregiert Mengen, bewahrt is_checked-Zustand
 - `formatAmount(amountBase, baseUnit)` in ShoppingListScreen — zeigt kg/l ab 1000
 
@@ -169,7 +183,8 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 - Kein Vorabhäkchen. Consent-Checkbox startet immer `false`.
 - `UserConsent.granted_at`: ISO8601-String — Existenz = Einwilligung erteilt
 - `hasGrantedConsent()` prüft: `typeof granted_at === 'string' && granted_at.length > 0`
-- Betroffenenrechte in SettingsScreen: Export (Alert mit JSON) + Profil löschen → Onboarding
+- Betroffenenrechte in SettingsScreen: Export (Share-Sheet mit JSON, Alert-Fallback) + Profil löschen → Onboarding
+- Profil löschen entfernt ALLES: SecureStore-Profil (`deleteProfile`) UND alle SQLite-Nutzerdaten (`clearAllUserData`: Einkaufslisten + cooked_history)
 - `CURRENT_POLICY_VERSION` in `src/lib/policy.ts` — App.tsx prüft beim Start: Consent vorhanden UND Policy-Version aktuell; sonst → Onboarding
 
 ## Implementierungsstand
@@ -194,12 +209,14 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 74 Tests grün (scoring, profile-store, database, allergen-filter) |
+| Test-Suite | ✅ 89 Tests grün (scoring, profile-store, database, allergen-filter, units) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
 | Accessibility-Baseline (Issue #19) | ✅ done — accessibilityLabel auf allen Pressables in 4 Screens |
 | Policy-Version-Konstante (Issue #20) | ✅ done — src/lib/policy.ts; App.tsx prüft Policy-Version bei Start |
+| Küchengeräte-Filter (Issue #10) | ✅ done — im Simulator verifiziert (28.06.2026) |
+| Code-Review-Fixes (28.06.2026) | ✅ done — DSGVO-Vollständige-Löschung (clearAllUserData), Machbarkeit zählt techniques_required, geteiltes lib/units, Shopping-Mutationen transaktional, Supabase null-safe, Export via Share |
 
 ## Design-System
 

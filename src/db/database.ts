@@ -1,5 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import type { Dish, Ingredient, ShoppingItem, ShoppingList } from '../types';
+import { normalizeToBase } from '../lib/units';
+
+// Re-exported so existing imports (and tests) keep resolving it from here.
+export { normalizeToBase };
 
 const SCHEMA_VERSION = 2;
 const ACTIVE_LIST_ID = 'active';
@@ -155,12 +159,6 @@ export async function markDishCooked(dishId: string): Promise<void> {
 
 // ─── Shopping list helpers ───────────────────────────────────────────────────
 
-export function normalizeToBase(amount: number, unit: string, ing: Ingredient): number {
-  if (unit === ing.base_unit) return amount;
-  const factor = ing.unit_conversions[unit];
-  return factor != null ? amount * factor : amount;
-}
-
 // Only for use in tests — resets the SQLite singleton so mocks work per-test
 export function _resetDbForTests(): void {
   db = null;
@@ -239,28 +237,32 @@ export async function addDishToList(
   const database = getDb();
   await getOrCreateActiveList();
 
-  await database.runAsync(
-    'INSERT OR REPLACE INTO shopping_list_dishes (list_id, dish_id, dish_name) VALUES (?, ?, ?)',
-    ACTIVE_LIST_ID,
-    dish.id,
-    dish.name
-  );
-
-  // Upsert source items for this dish
-  for (const di of dish.ingredients) {
-    const ing = ingredientMap.get(di.ingredient_id);
-    if (!ing) continue;
-    const base = normalizeToBase(di.amount, di.unit, ing);
+  // Single transaction so the source-item writes and the recalc can never be
+  // observed half-applied if a second mutation interleaves at an await point.
+  await database.withTransactionAsync(async () => {
     await database.runAsync(
-      'INSERT OR REPLACE INTO shopping_source_items (list_id, dish_id, ingredient_id, amount_base) VALUES (?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO shopping_list_dishes (list_id, dish_id, dish_name) VALUES (?, ?, ?)',
       ACTIVE_LIST_ID,
       dish.id,
-      di.ingredient_id,
-      base
+      dish.name
     );
-  }
 
-  await recalculateItems(database, ACTIVE_LIST_ID, ingredientMap);
+    // Upsert source items for this dish
+    for (const di of dish.ingredients) {
+      const ing = ingredientMap.get(di.ingredient_id);
+      if (!ing) continue;
+      const base = normalizeToBase(di.amount, di.unit, ing);
+      await database.runAsync(
+        'INSERT OR REPLACE INTO shopping_source_items (list_id, dish_id, ingredient_id, amount_base) VALUES (?, ?, ?, ?)',
+        ACTIVE_LIST_ID,
+        dish.id,
+        di.ingredient_id,
+        base
+      );
+    }
+
+    await recalculateItems(database, ACTIVE_LIST_ID, ingredientMap);
+  });
 }
 
 export async function removeDishFromList(
@@ -268,17 +270,19 @@ export async function removeDishFromList(
   ingredientMap: Map<string, Ingredient>
 ): Promise<void> {
   const database = getDb();
-  await database.runAsync(
-    'DELETE FROM shopping_source_items WHERE list_id = ? AND dish_id = ?',
-    ACTIVE_LIST_ID,
-    dishId
-  );
-  await database.runAsync(
-    'DELETE FROM shopping_list_dishes WHERE list_id = ? AND dish_id = ?',
-    ACTIVE_LIST_ID,
-    dishId
-  );
-  await recalculateItems(database, ACTIVE_LIST_ID, ingredientMap);
+  await database.withTransactionAsync(async () => {
+    await database.runAsync(
+      'DELETE FROM shopping_source_items WHERE list_id = ? AND dish_id = ?',
+      ACTIVE_LIST_ID,
+      dishId
+    );
+    await database.runAsync(
+      'DELETE FROM shopping_list_dishes WHERE list_id = ? AND dish_id = ?',
+      ACTIVE_LIST_ID,
+      dishId
+    );
+    await recalculateItems(database, ACTIVE_LIST_ID, ingredientMap);
+  });
 }
 
 export async function getActiveShoppingList(): Promise<ShoppingList | null> {
@@ -332,7 +336,26 @@ export async function toggleShoppingItem(itemId: string): Promise<void> {
 
 export async function clearActiveShoppingList(): Promise<void> {
   const database = getDb();
-  await database.runAsync('DELETE FROM shopping_list_dishes WHERE list_id = ?', ACTIVE_LIST_ID);
-  await database.runAsync('DELETE FROM shopping_source_items WHERE list_id = ?', ACTIVE_LIST_ID);
-  await database.runAsync('DELETE FROM shopping_items WHERE list_id = ?', ACTIVE_LIST_ID);
+  await database.withTransactionAsync(async () => {
+    await database.runAsync('DELETE FROM shopping_list_dishes WHERE list_id = ?', ACTIVE_LIST_ID);
+    await database.runAsync('DELETE FROM shopping_source_items WHERE list_id = ?', ACTIVE_LIST_ID);
+    await database.runAsync('DELETE FROM shopping_items WHERE list_id = ?', ACTIVE_LIST_ID);
+  });
+}
+
+/**
+ * Erases ALL user-generated data held in SQLite: every shopping list and the
+ * cooked-history log. Used by the "Profil löschen" flow so that GDPR erasure
+ * actually removes everything — not just the SecureStore profile. The read-only
+ * dish/ingredient catalog cache is intentionally left intact (it is not user data).
+ */
+export async function clearAllUserData(): Promise<void> {
+  const database = getDb();
+  await database.withTransactionAsync(async () => {
+    await database.runAsync('DELETE FROM shopping_list_dishes');
+    await database.runAsync('DELETE FROM shopping_source_items');
+    await database.runAsync('DELETE FROM shopping_items');
+    await database.runAsync('DELETE FROM shopping_lists');
+    await database.runAsync('DELETE FROM cooked_history');
+  });
 }

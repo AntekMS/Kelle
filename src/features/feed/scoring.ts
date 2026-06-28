@@ -1,14 +1,31 @@
 import type { Dish, Goal, Ingredient, UserProfile } from '../../types';
+import { normalizeToBase } from '../../lib/units';
 
 // ── Machbarkeit ────────────────────────────────────────────────────────────
-// Based on whether technique_taught is new for this user.
+// Based on how many of the techniques the dish demands are NEW for this user —
+// i.e. the techniques it requires plus the one it teaches, minus what the user
+// already knows.
 // 0 new = 0.8 (comfortable, no growth), 1 new = 1.0 (sweet spot), 2 = 0.4, 3+ = 0.1
 
 const MACHBARKEIT_TABLE = [0.8, 1.0, 0.4, 0.1] as const;
 
+// Counts the distinct techniques a dish involves that the user has not marked as
+// known. technique_taught is included because, by definition, it is something the
+// dish introduces.
+export function countNewTechniques(dish: Dish, profile: UserProfile): number {
+  const known = new Set(profile.skill_techniques);
+  const involved = new Set<string>(dish.techniques_required);
+  if (dish.technique_taught) involved.add(dish.technique_taught);
+
+  let newCount = 0;
+  for (const technique of involved) {
+    if (!known.has(technique)) newCount++;
+  }
+  return newCount;
+}
+
 function scoreMachbarkeit(dish: Dish, profile: UserProfile): number {
-  const isNew = !profile.skill_techniques.includes(dish.technique_taught);
-  const newCount = isNew ? 1 : 0;
+  const newCount = countNewTechniques(dish, profile);
   return MACHBARKEIT_TABLE[Math.min(newCount, 3)];
 }
 
@@ -33,11 +50,8 @@ function computeNutritionPerServing(
     const ing = ingredientMap.get(di.ingredient_id);
     if (!ing) continue;
 
-    // Normalize to base_unit amount
-    const conversionFactor = ing.unit_conversions[di.unit] ?? (di.unit === 'g' || di.unit === 'ml' ? 1 : null);
-    if (conversionFactor === null) continue;
-
-    const amountInBaseUnit = di.amount * conversionFactor;
+    // Normalize to base_unit amount (shared with the shopping-list layer)
+    const amountInBaseUnit = normalizeToBase(di.amount, di.unit, ing);
     const factor = amountInBaseUnit / 100;
 
     kcal += ing.nutrients_per_100g.kcal * factor;

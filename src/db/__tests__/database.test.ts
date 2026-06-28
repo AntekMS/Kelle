@@ -28,6 +28,10 @@ import {
   getActiveDishIds,
   seedDishes,
   seedIngredients,
+  addDishToList,
+  removeDishFromList,
+  clearActiveShoppingList,
+  clearAllUserData,
 } from '../database';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -221,5 +225,57 @@ describe('seedIngredients', () => {
       JSON.stringify(sampleIngredient),
       expect.any(String)
     );
+  });
+});
+
+// ── Transaktionen für Einkaufslisten-Mutationen ──────────────────────────────
+
+const ingMap = new Map<string, Ingredient>([['ing1', sampleIngredient]]);
+
+describe('Einkaufslisten-Mutationen laufen in einer Transaktion', () => {
+  test('addDishToList kapselt die Schreibvorgänge in withTransactionAsync', async () => {
+    mockDb.getFirstAsync.mockResolvedValue({ id: 'active' }); // Liste existiert bereits
+    await addDishToList(sampleDish, ingMap);
+    expect(mockDb.withTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test('removeDishFromList kapselt die Schreibvorgänge in withTransactionAsync', async () => {
+    await removeDishFromList('d1', ingMap);
+    expect(mockDb.withTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test('clearActiveShoppingList kapselt die Schreibvorgänge in withTransactionAsync', async () => {
+    await clearActiveShoppingList();
+    expect(mockDb.withTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── clearAllUserData (DSGVO-Löschung) ────────────────────────────────────────
+
+describe('clearAllUserData', () => {
+  test('löscht alle nutzerbezogenen SQLite-Tabellen', async () => {
+    await clearAllUserData();
+    const deleted = mockDb.runAsync.mock.calls.map((c) => c[0] as string);
+    expect(deleted).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('DELETE FROM shopping_list_dishes'),
+        expect.stringContaining('DELETE FROM shopping_source_items'),
+        expect.stringContaining('DELETE FROM shopping_items'),
+        expect.stringContaining('DELETE FROM shopping_lists'),
+        expect.stringContaining('DELETE FROM cooked_history'),
+      ])
+    );
+  });
+
+  test('läuft in einer einzigen Transaktion', async () => {
+    await clearAllUserData();
+    expect(mockDb.withTransactionAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test('rührt den Rezept-Katalog (dishes/ingredients) nicht an', async () => {
+    await clearAllUserData();
+    const deleted = mockDb.runAsync.mock.calls.map((c) => c[0] as string);
+    expect(deleted.some((sql) => /DELETE FROM dishes\b/.test(sql))).toBe(false);
+    expect(deleted.some((sql) => /DELETE FROM ingredients\b/.test(sql))).toBe(false);
   });
 });
