@@ -1,23 +1,7 @@
 import { Pressable, Text, StyleSheet } from 'react-native';
 import type { Allergen } from '../types';
 import { colors } from '../theme/colors';
-
-const ALLERGEN_LABELS: Record<Allergen, string> = {
-  gluten: 'Gluten',
-  crustaceans: 'Krebstiere',
-  eggs: 'Eier',
-  fish: 'Fisch',
-  peanuts: 'Erdnüsse',
-  soybeans: 'Soja',
-  milk: 'Milch',
-  nuts: 'Schalenfrüchte',
-  celery: 'Sellerie',
-  mustard: 'Senf',
-  sesame: 'Sesam',
-  sulphites: 'Sulfite',
-  lupin: 'Lupinen',
-  molluscs: 'Weichtiere',
-};
+import { ALLERGEN_LABELS } from '../lib/labels';
 
 interface Props {
   allergen: Allergen;

@@ -1,6 +1,7 @@
-import { Image } from 'react-native';
+import { Image, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, type NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import type {
   MainTabParamList,
   FeedStackParamList,
@@ -12,11 +13,30 @@ import FeedScreen from '../features/feed/FeedScreen';
 import ShoppingListScreen from '../features/shopping/ShoppingListScreen';
 import FavoritesScreen from '../features/favorites/FavoritesScreen';
 import DishDetailScreen from '../features/dish/DishDetailScreen';
+import ProfilScreen from '../features/profil/ProfilScreen';
 import SettingsScreen from '../features/settings/SettingsScreen';
 import DatenschutzScreen from '../features/legal/DatenschutzScreen';
 import ImpressumScreen from '../features/legal/ImpressumScreen';
 import ICON_IMAGES from '../components/icon-images';
 import { colors } from '../theme/colors';
+
+function ProfileHeaderButton() {
+  const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
+  return (
+    <Pressable
+      onPress={() => navigation.navigate('Profil')}
+      hitSlop={12}
+      accessibilityLabel="Mein Profil öffnen"
+      accessibilityRole="button"
+    >
+      <Image
+        source={ICON_IMAGES.profil}
+        style={{ width: 24, height: 24, tintColor: colors.text, marginRight: 4 }}
+        resizeMode="contain"
+      />
+    </Pressable>
+  );
+}
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
@@ -27,8 +47,13 @@ const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 function FeedNavigator() {
   return (
     <FeedStack.Navigator>
-      <FeedStack.Screen name="Feed" component={FeedScreen} options={{ title: 'Küchen-Coach' }} />
+      <FeedStack.Screen
+        name="Feed"
+        component={FeedScreen}
+        options={{ title: 'Küchen-Coach', headerRight: () => <ProfileHeaderButton /> }}
+      />
       <FeedStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
+      <FeedStack.Screen name="Profil" component={ProfilScreen} options={{ title: 'Mein Profil' }} />
     </FeedStack.Navigator>
   );
 }
