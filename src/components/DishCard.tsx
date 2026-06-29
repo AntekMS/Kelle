@@ -2,6 +2,7 @@ import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import type { Dish, Ingredient } from '../types';
 import { colors } from '../theme/colors';
 import { computeNutritionPerServing } from '../features/feed/scoring';
+import PressableScale from './PressableScale';
 import DISH_IMAGES from './dish-images';
 import ICON_IMAGES from './icon-images';
 
@@ -56,7 +57,8 @@ export default function DishCard({
           >
             <Text style={styles.name}>{dish.name}</Text>
           </Pressable>
-          <Pressable
+          <PressableScale
+            activeScale={0.8}
             onPress={() => onToggleFavorite(dish.id)}
             hitSlop={8}
             accessibilityLabel={isFavorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
@@ -68,7 +70,7 @@ export default function DishCard({
               style={styles.heartIcon}
               resizeMode="contain"
             />
-          </Pressable>
+          </PressableScale>
           {isCooked && (
             <View style={styles.cookedBadge}>
               <Image source={ICON_IMAGES.check} style={styles.badgeIcon} resizeMode="contain" />
@@ -127,7 +129,7 @@ export default function DishCard({
         )}
 
         <View style={styles.actions}>
-          <Pressable
+          <PressableScale
             style={[styles.shoppingButton, isInShoppingList && styles.shoppingButtonActive]}
             onPress={() => onToggleShoppingList(dish.id)}
             accessibilityLabel={isInShoppingList ? 'Aus Liste entfernen' : 'Zur Liste hinzufügen'}
@@ -142,8 +144,8 @@ export default function DishCard({
             <Text style={[styles.shoppingButtonText, isInShoppingList && styles.shoppingButtonTextActive]}>
               {isInShoppingList ? 'In der Liste' : '+ Zur Liste'}
             </Text>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             style={[styles.button, isCooked && styles.buttonDisabled]}
             onPress={() => onMarkCooked(dish.id)}
             disabled={isCooked}
@@ -155,7 +157,7 @@ export default function DishCard({
             <Text style={[styles.buttonText, isCooked && styles.buttonTextDisabled]}>
               {isCooked ? 'Gekocht' : 'Als gekocht markieren'}
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
     </View>
