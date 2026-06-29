@@ -1,9 +1,10 @@
-import { EU14_ALLERGENS } from '../../types';
+import { EU14_ALLERGENS, EQUIPMENT_META } from '../../types';
 import type { DietOption, Goal } from '../../types';
 import {
   ALLERGEN_LABELS,
   DIET_LABELS,
   GOAL_LABELS,
+  EQUIPMENT_LABELS,
   equipmentLabel,
   formatTimeBudget,
 } from '../labels';
@@ -31,13 +32,20 @@ describe('Label-Maps Vollständigkeit', () => {
 });
 
 describe('equipmentLabel', () => {
-  test('bekannter Wert → Label aus EQUIPMENT_META', () => {
+  test('bekannter Wert → Label', () => {
     expect(equipmentLabel('toaster')).toBe('Toaster');
     expect(equipmentLabel('herdplatte')).toBe('Herdplatte');
   });
 
   test('unbekannter Wert → Rohwert (kein Crash)', () => {
     expect(equipmentLabel('unbekannt')).toBe('unbekannt');
+  });
+
+  test('EQUIPMENT_LABELS ist deckungsgleich mit EQUIPMENT_META (kein Drift)', () => {
+    for (const m of EQUIPMENT_META) {
+      expect(EQUIPMENT_LABELS[m.value]).toBe(m.label);
+    }
+    expect(Object.keys(EQUIPMENT_LABELS).length).toBe(EQUIPMENT_META.length);
   });
 });
 

@@ -234,14 +234,17 @@ export default function FeedScreen() {
   const { rankedDishes, profile, listDishIds, usingOfflineData, ingredientMap } = state;
 
   const query = searchQuery.trim().toLowerCase();
-  const visibleDishes = query
-    ? rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
-    : rankedDishes;
+  const sections = useMemo(() => {
+    const visibleDishes = query
+      ? rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
+      : rankedDishes;
+    const { forYou, cooked } = partitionByCooked(visibleDishes, profile.cooked_dish_ids);
+    const result: { title: string; data: Dish[] }[] = [];
+    if (forYou.length > 0) result.push({ title: 'Für dich', data: forYou });
+    if (cooked.length > 0) result.push({ title: 'Schon gekocht', data: cooked });
+    return result;
+  }, [rankedDishes, query, profile.cooked_dish_ids]);
 
-  const { forYou, cooked } = partitionByCooked(visibleDishes, profile.cooked_dish_ids);
-  const sections: { title: string; data: Dish[] }[] = [];
-  if (forYou.length > 0) sections.push({ title: 'Für dich', data: forYou });
-  if (cooked.length > 0) sections.push({ title: 'Schon gekocht', data: cooked });
   // Section-Header nur zeigen, wenn es wirklich zwei Gruppen gibt (sonst schlichte Liste).
   const showSectionHeaders = sections.length > 1;
 

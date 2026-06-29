@@ -1,4 +1,5 @@
 import type { Allergen, DietOption, Goal } from '../types';
+import { EQUIPMENT_META } from '../types';
 
 // Zentrale, menschenlesbare Anzeige-Labels (DE) für die Enum-Werte des Profils.
 // Single source — von AllergenChip, ProfilScreen und (bei Bedarf) Onboarding genutzt.
@@ -35,18 +36,10 @@ export const GOAL_LABELS: Record<Goal, string> = {
   low_carb: 'Low Carb',
 };
 
-export const EQUIPMENT_LABELS: Record<string, string> = {
-  herdplatte: 'Herdplatte',
-  ofen: 'Backofen',
-  mikrowelle: 'Mikrowelle',
-  airfryer: 'Airfryer',
-  wasserkocher: 'Wasserkocher',
-  mixer: 'Mixer',
-  puerierstab: 'Pürierstab',
-  toaster: 'Toaster',
-  sandwichmaker: 'Sandwichmaker',
-  reiskocher: 'Reiskocher',
-};
+// Aus EQUIPMENT_META abgeleitet (Single Source des Geräte-Pickers) — kann nicht driften.
+export const EQUIPMENT_LABELS: Record<string, string> = Object.fromEntries(
+  EQUIPMENT_META.map((m) => [m.value, m.label])
+);
 
 export function equipmentLabel(value: string): string {
   return EQUIPMENT_LABELS[value] ?? value;

@@ -49,9 +49,10 @@ src/
       units.test.ts # 9 Tests: normalizeToBase + formatShoppingAmount (Stück/kg/l/Fallback)
     policy.ts       # CURRENT_POLICY_VERSION Konstante — importiert in ConsentScreen, SettingsScreen, DatenschutzScreen, App.tsx
     labels.ts       # Zentrale DE-Anzeige-Labels: DIET_LABELS, GOAL_LABELS, ALLERGEN_LABELS,
-                    #   EQUIPMENT_LABELS/equipmentLabel, formatTimeBudget — genutzt von AllergenChip + ProfilScreen
+                    #   EQUIPMENT_LABELS (aus EQUIPMENT_META abgeleitet — kein Drift)/equipmentLabel,
+                    #   formatTimeBudget — genutzt von AllergenChip + ProfilScreen
     __tests__/
-      labels.test.ts # 7 Tests: Label-Vollständigkeit (Diät/Ziele/Allergene), equipmentLabel, formatTimeBudget
+      labels.test.ts # 8 Tests: Label-Vollständigkeit, EQUIPMENT_LABELS↔EQUIPMENT_META, equipmentLabel, formatTimeBudget
   store/
     profile-store.ts # SecureStore CRUD: loadProfile, saveProfile, deleteProfile, hasGrantedConsent
     __tests__/
@@ -246,7 +247,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 113 Tests grün (scoring, profile-store, database, allergen-filter, units, equipment, labels, feed-sections) |
+| Test-Suite | ✅ 114 Tests grün (scoring, profile-store, database, allergen-filter, units, equipment, labels, feed-sections) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
