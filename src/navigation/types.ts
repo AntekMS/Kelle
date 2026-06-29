@@ -13,6 +13,7 @@ export type OnboardingStackParamList = {
 export type FeedStackParamList = {
   Feed: undefined;
   DishDetail: { dishId: string };
+  Profil: undefined;
 };
 
 export type FavoritesStackParamList = {
