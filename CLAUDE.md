@@ -59,13 +59,16 @@ src/
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
                       # State: listDishIds + activeIngredientIds für overlap-Bonus + usingOfflineData
-                      # Suchfeld (TextInput über FlatList) → client-seitiger Name-Filter auf rankedDishes
+                      # SectionList: 'Für dich' (ungekocht) + 'Schon gekocht' via partitionByCooked
+                      #   (Header nur wenn beide Gruppen Daten haben); repetition_penalty bleibt im Scoring
+                      # Suchfeld (TextInput über Liste) → client-seitiger Name-Filter auf rankedDishes
                       # Header-Banner bei nicht-leerer Liste → cross-tab zu ShoppingTab (getParent)
                       # DishCard onPress → navigate DishDetail; ingredientMap an DishCard (Nährwerte)
                       # Offline-Banner wenn Cloud-Fetch fehlschlägt oder leer (usingOfflineData)
                       # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
                       # useFocusEffect → refreshListState() beim Tab-Wechsel (kein Cloud-Refetch)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
+      feed-sections.ts # partitionByCooked(dishes, cookedIds) → { forYou, cooked } (UI-Aufteilung, Reihenfolge erhalten)
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
                       # machbarkeit zählt NEUE Techniken aus techniques_required ∪ {technique_taught}
                       #   minus profile.skill_techniques (countNewTechniques, exportiert)
@@ -73,6 +76,7 @@ src/
                       #   pro Portion; genutzt von ziel_fit, DishCard und DishDetailScreen
       __tests__/
         scoring.test.ts  # 32 Tests: scoreDish + rankDishes + computeNutritionPerServing
+        feed-sections.test.ts # 4 Tests: partitionByCooked (Aufteilung, Reihenfolge, Randfälle)
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
@@ -98,7 +102,9 @@ src/
     DishCard.tsx      # technique_taught, diet_verified, time_minutes, Herz-Favorit, Shopping-Toggle
                       # Nährwert-Zeile (kcal/Protein/Carbs pro Portion) wenn ingredientMap übergeben
                       # Hero-Image + Name antippbar via onPress (→ DishDetail); height: 180 (fest)
+                      # Aktions-Buttons + Herz nutzen PressableScale (Tap-Animation)
                       # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
+    PressableScale.tsx # Pressable-Ersatz mit dezentem Scale-Feedback (Animated, useNativeDriver)
     dish-images.ts    # Statische Require-Map: image_asset-Name → JPG in assets/
     icon-images.ts    # Statische Require-Map: Icon-Name → PNG in assets/icons/
                       # 'settings' → icon_technique.png (Platzhalter bis icon_settings.png verfügbar)
@@ -227,7 +233,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 98 Tests grün (scoring, profile-store, database, allergen-filter, units) |
+| Test-Suite | ✅ 102 Tests grün (scoring, profile-store, database, allergen-filter, units, feed-sections) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
@@ -239,6 +245,8 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Nährwerte auf DishCard (Issue #7) | ✅ done — computeNutritionPerServing exportiert |
 | Suchfeld im Feed (Issue #22) | ✅ done — client-seitiger Name-Filter |
 | Einkaufslisten-UX (Issue #8) | ✅ done — 4. Tab, DishDetailScreen, Thumbnails, Gewürz-Kategorien konsistent (Bundled + Supabase) |
+| Feed-Verlauf-Sektion (Issue #23) | ✅ done — SectionList 'Für dich'/'Schon gekocht' (partitionByCooked) |
+| Tap-Animationen (Issue #12) | ✅ done — PressableScale auf DishCard-Aktionen + Herz |
 
 ## Design-System
 
