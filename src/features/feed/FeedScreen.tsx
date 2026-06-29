@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  FlatList,
+  SectionList,
   ActivityIndicator,
   Pressable,
   RefreshControl,
@@ -32,6 +32,7 @@ import { fetchDishesFromCloud, fetchIngredientsFromCloud } from '../../db/cloud-
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import { filterCompatibleDishes } from '../filter/allergen-filter';
 import { rankDishes } from './scoring';
+import { partitionByCooked } from './feed-sections';
 import DishCard from '../../components/DishCard';
 import { colors } from '../../theme/colors';
 
@@ -237,6 +238,13 @@ export default function FeedScreen() {
     ? rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
     : rankedDishes;
 
+  const { forYou, cooked } = partitionByCooked(visibleDishes, profile.cooked_dish_ids);
+  const sections: { title: string; data: Dish[] }[] = [];
+  if (forYou.length > 0) sections.push({ title: 'Für dich', data: forYou });
+  if (cooked.length > 0) sections.push({ title: 'Schon gekocht', data: cooked });
+  // Section-Header nur zeigen, wenn es wirklich zwei Gruppen gibt (sonst schlichte Liste).
+  const showSectionHeaders = sections.length > 1;
+
   const listBanner =
     listDishIds.size > 0 ? (
       <Pressable
@@ -283,26 +291,30 @@ export default function FeedScreen() {
           accessibilityLabel="Gericht suchen"
         />
       </View>
-      <FlatList
-        data={visibleDishes}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        stickySectionHeadersEnabled={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
         ListHeaderComponent={header}
+        renderSectionHeader={({ section }) =>
+          showSectionHeaders ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
+        }
         renderItem={({ item }) => (
-        <DishCard
-          dish={item}
-          isCooked={profile.cooked_dish_ids.includes(item.id)}
-          isInShoppingList={listDishIds.has(item.id)}
-          isFavorite={profile.favorites.includes(item.id)}
-          onMarkCooked={handleMarkCooked}
-          onToggleShoppingList={handleToggleShoppingList}
-          onToggleFavorite={handleToggleFavorite}
-          onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
-          ingredientMap={ingredientMap}
-        />
-      )}
+          <DishCard
+            dish={item}
+            isCooked={profile.cooked_dish_ids.includes(item.id)}
+            isInShoppingList={listDishIds.has(item.id)}
+            isFavorite={profile.favorites.includes(item.id)}
+            onMarkCooked={handleMarkCooked}
+            onToggleShoppingList={handleToggleShoppingList}
+            onToggleFavorite={handleToggleFavorite}
+            onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
+            ingredientMap={ingredientMap}
+          />
+        )}
         ListEmptyComponent={
           <View style={styles.empty}>
             {query ? (
@@ -353,6 +365,16 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   list: { padding: 16, backgroundColor: colors.background },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: colors.background,
+  },
   offlineBanner: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
