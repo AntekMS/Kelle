@@ -14,7 +14,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { Dish, UserProfile } from '../../types';
 import type { FeedStackParamList, MainTabParamList } from '../../navigation/types';
 import { loadProfile } from '../../store/profile-store';
-import { getAllDishes } from '../../db/database';
+import { initDatabase, getAllDishes } from '../../db/database';
 import {
   ALLERGEN_LABELS,
   DIET_LABELS,
@@ -31,20 +31,52 @@ export default function ProfilScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [dishesById, setDishesById] = useState<Map<string, Dish>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
-    const [loadedProfile, allDishes] = await Promise.all([loadProfile(), getAllDishes()]);
-    setProfile(loadedProfile);
-    setDishesById(new Map(allDishes.map((d) => [d.id, d])));
-    setLoading(false);
+  const load = useCallback(async (active: () => boolean) => {
+    setError(false);
+    try {
+      // initDatabase ist idempotent (CREATE TABLE IF NOT EXISTS) — nicht darauf verlassen,
+      // dass FeedScreen zuerst geseedet hat.
+      await initDatabase();
+      const [loadedProfile, allDishes] = await Promise.all([loadProfile(), getAllDishes()]);
+      if (!active()) return;
+      setProfile(loadedProfile);
+      setDishesById(new Map(allDishes.map((d) => [d.id, d])));
+    } catch {
+      if (active()) setError(true);
+    } finally {
+      if (active()) setLoading(false);
+    }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      load(() => isActive);
+      return () => { isActive = false; };
+    }, [load])
+  );
 
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.emptyTitle}>Profil konnte nicht geladen werden</Text>
+        <Pressable
+          style={styles.retryButton}
+          onPress={() => { setLoading(true); load(() => true); }}
+          accessibilityLabel="Erneut versuchen"
+        >
+          <Text style={styles.retryText}>Erneut versuchen</Text>
+        </Pressable>
       </View>
     );
   }
@@ -149,8 +181,10 @@ function Divider() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   container: { padding: 16, gap: 4 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: colors.background },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: colors.background, gap: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  retryButton: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
+  retryText: { color: colors.surface, fontSize: 15, fontWeight: '600' },
   privacyNote: { fontSize: 13, color: colors.textMuted, paddingHorizontal: 4, paddingBottom: 8 },
   sectionHeader: {
     fontSize: 12,

@@ -29,7 +29,9 @@ export default function PressableScale({
   children,
   ...rest
 }: Props) {
-  const scale = useRef(new Animated.Value(1)).current;
+  const scaleRef = useRef<Animated.Value | null>(null);
+  if (scaleRef.current === null) scaleRef.current = new Animated.Value(1);
+  const scale = scaleRef.current;
 
   const animateTo = (to: number) =>
     Animated.spring(scale, { toValue: to, useNativeDriver: true, speed: 40, bounciness: 6 }).start();

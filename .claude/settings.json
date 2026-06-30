@@ -1,5 +1,31 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx jest)",
+      "Bash(npx jest *)",
+      "mcp__github__list_issues",
+      "mcp__github__search_repositories",
+      "mcp__github__get_me"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r \"(.tool_input.file_path // .tool_response.filePath) // empty\"); echo \"$f\" | grep -qE \"/src/.*\\.tsx?$\" && { echo \"[tsc] typechecking after edit to $f\"; npx tsc --noEmit 2>&1 | tail -30; } || true",
+            "statusMessage": "Typechecking (tsc --noEmit)…",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
   }
 }
