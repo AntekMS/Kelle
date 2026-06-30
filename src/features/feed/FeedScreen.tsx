@@ -212,6 +212,21 @@ export default function FeedScreen() {
     setState({ ...state, rankedDishes: reranked, listDishIds: next, activeIngredientIds: nextActiveIngredients });
   }
 
+  // Hooks müssen vor den frühen Returns laufen (Rules of Hooks) — daher hier oben,
+  // mit Status-Guard im Memo statt nach dem loading/error-Return.
+  const query = searchQuery.trim().toLowerCase();
+  const sections = useMemo(() => {
+    if (state.status !== 'ready') return [];
+    const visibleDishes = query
+      ? state.rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
+      : state.rankedDishes;
+    const { forYou, cooked } = partitionByCooked(visibleDishes, state.profile.cooked_dish_ids);
+    const result: { title: string; data: Dish[] }[] = [];
+    if (forYou.length > 0) result.push({ title: 'Für dich', data: forYou });
+    if (cooked.length > 0) result.push({ title: 'Schon gekocht', data: cooked });
+    return result;
+  }, [state, query]);
+
   if (state.status === 'loading') {
     return (
       <View style={styles.center}>
@@ -232,18 +247,6 @@ export default function FeedScreen() {
   }
 
   const { rankedDishes, profile, listDishIds, usingOfflineData, ingredientMap } = state;
-
-  const query = searchQuery.trim().toLowerCase();
-  const sections = useMemo(() => {
-    const visibleDishes = query
-      ? rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
-      : rankedDishes;
-    const { forYou, cooked } = partitionByCooked(visibleDishes, profile.cooked_dish_ids);
-    const result: { title: string; data: Dish[] }[] = [];
-    if (forYou.length > 0) result.push({ title: 'Für dich', data: forYou });
-    if (cooked.length > 0) result.push({ title: 'Schon gekocht', data: cooked });
-    return result;
-  }, [rankedDishes, query, profile.cooked_dish_ids]);
 
   // Section-Header nur zeigen, wenn es wirklich zwei Gruppen gibt (sonst schlichte Liste).
   const showSectionHeaders = sections.length > 1;
