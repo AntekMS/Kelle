@@ -103,7 +103,7 @@ src/
     profil/
       ProfilScreen.tsx        # Read-only Profil (FeedStack-Route 'Profil', via Header-Button im Feed):
                               # Ernährung/Allergien, Ziele/Zeitbudget, Küche, Verlauf gekochter Gerichte
-                              #   (antippbar → DishDetail), Link → SettingsTab (getParent). Labels aus lib/labels.
+                              #   (antippbar → DishDetail), Link → Settings (navigate im FeedStack, Back-Stack bleibt — #30). Labels aus lib/labels.
     settings/
       SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export via Share, Löschen) + Links zu Datenschutz/Impressum
                               # Löschen → deleteProfile() + clearAllUserData() (SecureStore + SQLite)
@@ -128,7 +128,8 @@ src/
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
     OnboardingNavigator.tsx # Bindet alle 7 Screens + OnboardingProvider ein
     MainNavigator.tsx       # Bottom-Tab-Navigator (4 Tabs) + nested Stacks:
-                            #   FeedTab: FeedStack (Feed → DishDetail, Profil); Feed hat headerRight → ProfileHeaderButton
+                            #   FeedTab: FeedStack (Feed → DishDetail, Profil, Settings/Datenschutz/Impressum); Feed hat headerRight → ProfileHeaderButton
+                            #     Settings-Trio auch im FeedStack registriert → Profil→Einstellungen pusht in den Stack (Back-Swipe bleibt erhalten — #30)
                             #   FavoritesTab: FavStack (Favorites → DishDetail)
                             #   ShoppingTab: ShoppingStack (ShoppingList → DishDetail)
                             #   SettingsTab: SettingsStack (Settings → Datenschutz → Impressum)
@@ -263,6 +264,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Mein Profil (Issue #24) | ✅ done — ProfilScreen via Feed-Header-Button; read-only; zentrale lib/labels; Link zu Settings |
 | Feed-Verlauf-Sektion (Issue #23) | ✅ done — SectionList 'Für dich'/'Schon gekocht' (partitionByCooked) |
 | Tap-Animationen (Issue #12) | ✅ done — PressableScale auf DishCard-Aktionen + Herz |
+| Back-Swipe-Navigation (Issue #30) | ✅ done — Settings-Trio im FeedStack registriert; Profil→Einstellungen pusht statt Cross-Tab-Sprung |
 
 ## Design-System
 
@@ -287,6 +289,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 - **icon_person.png**: Fehlt noch in `assets/icons/` — Profil-Header-Button nutzt Platzhalter `icon_technique.png`. Monochromes Person-/Avatar-Icon (512×512 PNG) ablegen und `icon-images.ts` `profil`-Key anpassen.
 - **Supabase-Hosting-Region**: Projekt liegt in `ap-south-1` (Mumbai), NICHT EU. DatenschutzScreen behauptet „EU-Hosting" → vor Release korrigieren (nur Katalogdaten, keine Art.-9-Daten in der Cloud, aber Aussage muss stimmen).
 - **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release)
+- **Kalorienbedarf-Profiling** (Issue #29, v1.1 — M18): Alter/Geschlecht/Gewicht/Größe → Tagesbedarf → Portionsmengen. **Art.-9-Gesundheitsdaten → lokal-only**, niemals Cloud/USDA; erfordert Policy-Version-Bump (`src/lib/policy.ts`). Vor Code DSGVO-/Design-Konzept abnehmen lassen.
 - **Ratings**: Phase 2 — benötigt Cloud-Aggregation
 - **Cloud-Accounts + Login** (Issues #4, #5): v2.0 — nur nicht-sensible Daten (`favorites`, `cooked_dish_ids`) dürfen in die Cloud; `allergies`/`diet`/`consent` bleiben lokal (DSGVO Art. 9)
 
