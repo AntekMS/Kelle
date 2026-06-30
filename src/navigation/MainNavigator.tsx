@@ -54,6 +54,9 @@ function FeedNavigator() {
       />
       <FeedStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
       <FeedStack.Screen name="Profil" component={ProfilScreen} options={{ title: 'Mein Profil' }} />
+      <FeedStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Einstellungen' }} />
+      <FeedStack.Screen name="Datenschutz" component={DatenschutzScreen} options={{ title: 'Datenschutzerklärung' }} />
+      <FeedStack.Screen name="Impressum" component={ImpressumScreen} options={{ title: 'Impressum' }} />
     </FeedStack.Navigator>
   );
 }

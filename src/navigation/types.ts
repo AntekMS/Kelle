@@ -14,6 +14,9 @@ export type FeedStackParamList = {
   Feed: undefined;
   DishDetail: { dishId: string };
   Profil: undefined;
+  Settings: undefined;
+  Datenschutz: undefined;
+  Impressum: undefined;
 };
 
 export type FavoritesStackParamList = {

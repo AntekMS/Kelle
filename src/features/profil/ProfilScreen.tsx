@@ -10,9 +10,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { Dish, UserProfile } from '../../types';
-import type { FeedStackParamList, MainTabParamList } from '../../navigation/types';
+import type { FeedStackParamList } from '../../navigation/types';
 import { loadProfile } from '../../store/profile-store';
 import { initDatabase, getAllDishes } from '../../db/database';
 import {
@@ -151,9 +150,7 @@ export default function ProfilScreen() {
       <View style={[styles.card, styles.settingsCard]}>
         <Pressable
           style={styles.row}
-          onPress={() =>
-            navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('SettingsTab')
-          }
+          onPress={() => navigation.navigate('Settings')}
           accessibilityLabel="Zu den Einstellungen"
           accessibilityRole="button"
         >
