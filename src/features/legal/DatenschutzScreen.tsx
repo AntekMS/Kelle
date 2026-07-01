@@ -34,9 +34,11 @@ export default function DatenschutzScreen() {
 
       <Text style={styles.section}>3. Rezept-Katalog (Cloud)</Text>
       <Text style={styles.body}>
-        Gerichte und Zutaten werden aus einer Cloud-Datenbank (Supabase, EU-Hosting) geladen.
-        Dabei werden keinerlei Profil- oder Allergiedaten übertragen — nur anonyme
-        Leseanfragen für den öffentlichen Katalog.
+        Gerichte und Zutaten werden aus einer Cloud-Datenbank (Supabase, Serverstandort
+        Mumbai/Indien) geladen. Dabei werden ausschließlich anonyme Leseanfragen für den
+        öffentlichen Rezept-Katalog gestellt — es werden keinerlei personenbezogene Daten,
+        insbesondere keine Profil-, Allergie- oder Gesundheitsdaten (Art. 9 DSGVO),
+        übertragen. Diese Daten verlassen dein Gerät zu keinem Zeitpunkt.
       </Text>
 
       <Text style={styles.section}>4. Rechtsgrundlage</Text>

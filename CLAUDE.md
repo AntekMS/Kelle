@@ -67,14 +67,17 @@ src/
     feed/
       FeedScreen.tsx  # Pipeline: Cloud → SQLite-Cache → filterCompatibleDishes → rankDishes
                       # State: listDishIds + activeIngredientIds für overlap-Bonus + usingOfflineData
-                      # SectionList: 'Für dich' (ungekocht) + 'Schon gekocht' via partitionByCooked
-                      #   (Header nur wenn beide Gruppen Daten haben); repetition_penalty bleibt im Scoring
+                      # LAYOUT (#32): FeaturedDishCard (forYou[0], 'FÜR DICH HEUTE') im ListHeader
+                      #   + 2-Spalten-Grid aus DishGridCard. SectionList behält 'Für dich'/'Schon gekocht',
+                      #   aber section.data = Dish[][] (chunkPairs à 2); renderItem = row mit 2 Grid-Karten
+                      #   (leerer gridSpacer bei ungerader Anzahl). Bei aktiver Suche: kein Featured.
+                      # Karten haben nur noch Herz (Favorit) — Liste/Gekocht liegen auf DishDetail
                       # Suchfeld (TextInput über Liste) → client-seitiger Name-Filter auf rankedDishes
                       # Header-Banner bei nicht-leerer Liste → cross-tab zu ShoppingTab (getParent)
-                      # DishCard onPress → navigate DishDetail; ingredientMap an DishCard (Nährwerte)
-                      # Offline-Banner wenn Cloud-Fetch fehlschlägt oder leer (usingOfflineData)
+                      # Offline: NetInfo.fetch() (echter Netzstatus) ODER Cloud-Fetch fehlschlägt/leer → usingOfflineData
                       # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
-                      # useFocusEffect → refreshListState() beim Tab-Wechsel (kein Cloud-Refetch)
+                      # useFocusEffect → refreshOnFocus(): Profil + Liste neu laden + neu ranken
+                      #   (übernimmt in DishDetail markierte gekocht/Favorit/Listen-Änderungen)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
       feed-sections.ts # partitionByCooked(dishes, cookedIds) → { forYou, cooked } (UI-Aufteilung, Reihenfolge erhalten)
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
@@ -89,16 +92,17 @@ src/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
     favorites/
-      FavoritesScreen.tsx  # Zeigt profile.favorites gefilterte Gerichte; gleiche Aktionen wie Feed
-                           # Kein Scoring/Ranking — zeigt alle Favoriten ungefiltert
+      FavoritesScreen.tsx  # 2-Spalten-Grid (DishGridCard, chunkPairs) von profile.favorites
+                           # Kein Scoring/Ranking; Herz entfernt Gericht direkt; catchy Empty-State (Icon)
                            # useFocusEffect → vollständiger Reload beim Tab-Wechsel (SQLite-only)
     shopping/
       ShoppingListScreen.tsx  # Eigener Tab (ShoppingStack); Gerichte-Card mit Thumbnail + antippbar → DishDetail
                               # Zutaten gruppiert nach aisle_category; Mengen via formatShoppingAmount
                               # useFocusEffect → Reload beim Tab-Fokus; "Leeren" lädt neu (kein goBack)
     dish/
-      DishDetailScreen.tsx    # Rezept-Screen (Param dishId): Hero, Nährwerte, Zutaten (Originalmengen),
-                              # nummerierte Schritte, "+ Zur Einkaufsliste"-Toggle
+      DishDetailScreen.tsx    # Rezept-Screen (Param dishId): Hero, Herz-Favorit (neben Name), Nährwerte,
+                              # Zutaten (Originalmengen), nummerierte Schritte,
+                              # "+ Zur Einkaufsliste"-Toggle + "Als gekocht markieren" (#33, lädt Profil)
                               # in FeedStack, FavStack und ShoppingStack registriert
     profil/
       ProfilScreen.tsx        # Read-only Profil (FeedStack-Route 'Profil', via Header-Button im Feed):
@@ -109,12 +113,16 @@ src/
                               # Löschen → deleteProfile() + clearAllUserData() (SecureStore + SQLite)
     legal/
       DatenschutzScreen.tsx   # Statische Datenschutzerklärung (Art. 13 DSGVO) — Kontaktdaten noch Platzhalter
+                              # Cloud-Abschnitt: Serverstandort Mumbai/Indien korrekt benannt (nicht mehr "EU-Hosting")
       ImpressumScreen.tsx     # §5 DDG Impressum — Kontaktdaten noch Platzhalter
   components/
-    DishCard.tsx      # technique_taught, diet_verified, time_minutes, Herz-Favorit, Shopping-Toggle
-                      # Nährwert-Zeile (kcal/Protein/Carbs pro Portion) wenn ingredientMap übergeben
-                      # Hero-Image + Name antippbar via onPress (→ DishDetail); height: 180 (fest)
-                      # Aktions-Buttons + Herz nutzen PressableScale (Tap-Animation)
+    DishGridCard.tsx   # Kompakte Grid-Karte (Feed + Favoriten): Bild (aspectRatio 4:3),
+                      #   Herz-Overlay + Gekocht-Badge auf dem Bild, Name (1 Zeile) + Meta (Zeit·kcal)
+                      #   Ganze Karte onPress → DishDetail; flex:1 (Grid-Zelle); PressableScale
+                      #   Nur Favorit on-card — Liste/Gekocht liegen auf DishDetail
+    FeaturedDishCard.tsx # Große Hero-Karte oben im Feed ('FÜR DICH HEUTE'): volles Bild, Text-Overlay
+                      #   (Eyebrow/Name/Meta Zeit·kcal·Protein), Herz-Overlay; onPress → DishDetail
+                      # (DishCard.tsx entfernt — durch die beiden Karten oben ersetzt)
                       # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
     PressableScale.tsx # Pressable-Ersatz mit dezentem Scale-Feedback (Animated, useNativeDriver)
     dish-images.ts    # Statische Require-Map: image_asset-Name → JPG in assets/
@@ -265,6 +273,12 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Feed-Verlauf-Sektion (Issue #23) | ✅ done — SectionList 'Für dich'/'Schon gekocht' (partitionByCooked) |
 | Tap-Animationen (Issue #12) | ✅ done — PressableScale auf DishCard-Aktionen + Herz |
 | Back-Swipe-Navigation (Issue #30) | ✅ done — Settings-Trio im FeedStack registriert; Profil→Einstellungen pusht statt Cross-Tab-Sprung |
+| Feed-Redesign: Featured + 2-Spalten-Grid (Issue #32) | ✅ done — FeaturedDishCard + DishGridCard; SectionList mit chunkPairs; DishCard.tsx entfernt |
+| DishDetail: "Als gekocht markieren" + Herz (Issue #33) | ✅ done — lädt Profil, markDishCooked/saveProfile; Favorit-Toggle |
+| Catchy Empty-States (Issue #34) | ✅ done — Icon + Text auf Feed/Favoriten/Einkauf |
+| Offline-Erkennung via NetInfo (Issue #18) | ✅ done — NetInfo.fetch() im Feed; Geräte-Verifikation über Mobilfunk noch offen |
+| App-Store-Identität + EAS (Issue #16) | 🟡 teilw. — bundleId/package/Splash in app.json + eas.json angelegt; Developer-Accounts + Store-Metadaten offen |
+| Rechtliche Angaben (Issue #15) | 🟡 teilw. — "EU-Hosting"-Falschaussage korrigiert; Kontaktdaten-Platzhalter offen (Nutzer-Daten nötig) |
 
 ## Design-System
 
@@ -277,7 +291,7 @@ assets/icons/              # 15 PNG-Dateien (noch vom Nutzer anzulegen — siehe
 
 Fonts: `Spectral_400Regular`, `Spectral_600SemiBold`, `Spectral_700Bold` via `@expo-google-fonts/spectral`.
 Font-Loading in `App.tsx` mit `useFonts` + `SplashScreen.preventAutoHideAsync()`.
-Spectral aktiv auf: DishCard-Name (`600SemiBold`), WelcomeScreen-Titel (`700Bold`).
+Spectral aktiv auf: DishGridCard-Name (`600SemiBold`), FeaturedDishCard-Name (`700Bold`), WelcomeScreen-Titel (`700Bold`).
 
 Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style gesetzt.
 
@@ -287,8 +301,10 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 - **icon_cart.png**: Fehlt noch in `assets/icons/` — Einkauf-Tab nutzt Platzhalter `icon_check.png`. Monochromes Warenkorb-Icon (512×512 PNG) ablegen und `icon-images.ts` `shopping`-Key anpassen.
 - **Geräte-Icons** (Issue #9): `icon_puerierstab.png`, `icon_toaster.png`, `icon_sandwichmaker.png`, `icon_reiskocher.png` fehlen — aktuell alle Platzhalter `icon_technique.png`. Monochrome 512×512 PNGs ablegen und die jeweiligen `iconKey`-Mappings in `icon-images.ts` anpassen.
 - **icon_person.png**: Fehlt noch in `assets/icons/` — Profil-Header-Button nutzt Platzhalter `icon_technique.png`. Monochromes Person-/Avatar-Icon (512×512 PNG) ablegen und `icon-images.ts` `profil`-Key anpassen.
-- **Supabase-Hosting-Region**: Projekt liegt in `ap-south-1` (Mumbai), NICHT EU. DatenschutzScreen behauptet „EU-Hosting" → vor Release korrigieren (nur Katalogdaten, keine Art.-9-Daten in der Cloud, aber Aussage muss stimmen).
-- **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release)
+- **Supabase-Hosting-Region**: Projekt liegt in `ap-south-1` (Mumbai), NICHT EU. ✅ DatenschutzScreen-Aussage korrigiert (Serverstandort Mumbai/Indien; nur Katalogdaten, keine Art.-9-Daten in der Cloud).
+- **Impressum/Datenschutz**: Platzhalter `[Vorname Nachname]`, `[Straße Hausnummer, PLZ Ort]`, `[deine@email.de]` in `DatenschutzScreen.tsx` + `ImpressumScreen.tsx` ersetzen (§5 DDG + DSGVO Art. 13 Pflicht vor Release) — braucht echte Daten vom Nutzer (Issue #15).
+- **App-Store (Issue #16, Rest)**: `app.json` (bundleId/package/Splash) + `eas.json` liegen vor. Offen: Apple-/Google-Developer-Accounts mit EAS verbinden, Store-Metadaten (Name/Beschreibung/Keywords/Screenshots). `bundleIdentifier`/`package` = `de.kelleapp.kuechencoach` (ggf. anpassen).
+- **Offline-Geräte-Test (Issue #18, Rest)**: NetInfo-Erkennung im Code; physisches iPhone über Mobilfunk gegen Supabase noch zu verifizieren (RLS: INSERT mit anon-Key → 403 erwartet).
 - **Kalorienbedarf-Profiling** (Issue #29, v1.1 — M18): Alter/Geschlecht/Gewicht/Größe → Tagesbedarf → Portionsmengen. **Art.-9-Gesundheitsdaten → lokal-only**, niemals Cloud/USDA; erfordert Policy-Version-Bump (`src/lib/policy.ts`). Vor Code DSGVO-/Design-Konzept abnehmen lassen.
 - **Ratings**: Phase 2 — benötigt Cloud-Aggregation
 - **Cloud-Accounts + Login** (Issues #4, #5): v2.0 — nur nicht-sensible Daten (`favorites`, `cooked_dish_ids`) dürfen in die Cloud; `allergies`/`diet`/`consent` bleiben lokal (DSGVO Art. 9)
@@ -298,7 +314,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 ```bash
 npx expo start          # Dev-Server
 npx expo start --ios    # iOS-Simulator
-npx jest                # Tests (98 grün)
+npx jest                # Tests (114 grün)
 npx tsc --noEmit        # Typcheck (0 Fehler)
 ```
 

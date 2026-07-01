@@ -114,9 +114,10 @@ export default function ShoppingListScreen({ navigation }: Props) {
   if (!list) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyTitle}>Keine Einkaufsliste</Text>
+        <Image source={ICON_IMAGES.shopping} style={styles.emptyIcon} resizeMode="contain" />
+        <Text style={styles.emptyTitle}>Deine Liste ist leer</Text>
         <Text style={styles.emptySub}>
-          Tippe auf „+ Zur Liste" auf einer Gerichtskarte, um Zutaten hinzuzufügen.
+          Öffne ein Gericht und tippe auf „+ Zur Einkaufsliste", um Zutaten zu sammeln.
         </Text>
       </View>
     );
@@ -224,7 +225,8 @@ export default function ShoppingListScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: colors.background },
+  emptyIcon: { width: 52, height: 52, tintColor: colors.primaryMuted, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center', marginBottom: 8 },
   emptySub: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 21 },
   list: { padding: 16, backgroundColor: colors.background },

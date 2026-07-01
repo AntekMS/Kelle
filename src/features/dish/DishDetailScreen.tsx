@@ -10,16 +10,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import type { Dish, DishIngredient, Ingredient } from '../../types';
+import type { Dish, DishIngredient, Ingredient, UserProfile } from '../../types';
 import {
   getDishById,
   getAllIngredients,
   getActiveDishIds,
   addDishToList,
   removeDishFromList,
+  markDishCooked,
 } from '../../db/database';
+import { loadProfile, saveProfile } from '../../store/profile-store';
 import { computeNutritionPerServing } from '../feed/scoring';
 import { colors } from '../../theme/colors';
+import PressableScale from '../../components/PressableScale';
 import DISH_IMAGES from '../../components/dish-images';
 import ICON_IMAGES from '../../components/icon-images';
 
@@ -46,23 +49,29 @@ export default function DishDetailScreen() {
   const [dish, setDish] = useState<Dish | null>(null);
   const [ingredientMap, setIngredientMap] = useState<Map<string, Ingredient>>(new Map());
   const [inList, setInList] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [loadedDish, allIngredients, activeIds] = await Promise.all([
+    const [loadedDish, allIngredients, activeIds, loadedProfile] = await Promise.all([
       getDishById(dishId),
       getAllIngredients(),
       getActiveDishIds(),
+      loadProfile(),
     ]);
     setDish(loadedDish);
     setIngredientMap(new Map(allIngredients.map((i) => [i.id, i])));
     setInList(activeIds.includes(dishId));
+    setProfile(loadedProfile);
     setLoading(false);
   }, [dishId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const isCooked = !!profile?.cooked_dish_ids.includes(dishId);
+  const isFavorite = !!profile?.favorites.includes(dishId);
 
   async function handleToggleList() {
     if (!dish) return;
@@ -73,6 +82,28 @@ export default function DishDetailScreen() {
       await addDishToList(dish, ingredientMap);
       setInList(true);
     }
+  }
+
+  async function handleToggleFavorite() {
+    if (!profile) return;
+    const favorites = isFavorite
+      ? profile.favorites.filter((id) => id !== dishId)
+      : [...profile.favorites, dishId];
+    const updated: UserProfile = { ...profile, favorites, updated_at: new Date().toISOString() };
+    setProfile(updated);
+    await saveProfile(updated);
+  }
+
+  async function handleMarkCooked() {
+    if (!profile || isCooked) return;
+    await markDishCooked(dishId);
+    const updated: UserProfile = {
+      ...profile,
+      cooked_dish_ids: [...profile.cooked_dish_ids, dishId],
+      updated_at: new Date().toISOString(),
+    };
+    setProfile(updated);
+    await saveProfile(updated);
   }
 
   if (loading) {
@@ -104,7 +135,23 @@ export default function DishDetailScreen() {
       )}
 
       <View style={styles.body}>
-        <Text style={styles.name}>{dish.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{dish.name}</Text>
+          <PressableScale
+            activeScale={0.8}
+            hitSlop={8}
+            onPress={handleToggleFavorite}
+            accessibilityLabel={isFavorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+            accessibilityRole="togglebutton"
+            accessibilityState={{ selected: isFavorite }}
+          >
+            <Image
+              source={isFavorite ? ICON_IMAGES.heart_filled : ICON_IMAGES.heart_outline}
+              style={styles.heartIcon}
+              resizeMode="contain"
+            />
+          </PressableScale>
+        </View>
         {!!dish.description && <Text style={styles.description}>{dish.description}</Text>}
 
         <View style={styles.metaRow}>
@@ -162,6 +209,20 @@ export default function DishDetailScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={[styles.cookedButton, isCooked && styles.cookedButtonDone]}
+          onPress={handleMarkCooked}
+          disabled={isCooked}
+          accessibilityLabel={isCooked ? 'Bereits als gekocht markiert' : 'Als gekocht markieren'}
+        >
+          {isCooked && (
+            <Image source={ICON_IMAGES.check} style={styles.cookedButtonIcon} resizeMode="contain" />
+          )}
+          <Text style={[styles.cookedButtonText, isCooked && styles.cookedButtonTextDone]}>
+            {isCooked ? 'Gekocht' : 'Als gekocht markieren'}
+          </Text>
+        </Pressable>
+
         <Text style={styles.sectionTitle}>Zutaten</Text>
         <Text style={styles.servingHint}>für {dish.serving_base} {dish.serving_base === 1 ? 'Portion' : 'Portionen'}</Text>
         <View style={styles.ingredientList}>
@@ -198,7 +259,9 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
   hero: { width: '100%', height: 220 },
   body: { padding: 20, gap: 12 },
-  name: { fontSize: 24, fontFamily: 'Spectral_700Bold', color: colors.text },
+  nameRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  name: { flex: 1, fontSize: 24, fontFamily: 'Spectral_700Bold', color: colors.text },
+  heartIcon: { width: 26, height: 26, tintColor: colors.primary, marginTop: 4 },
   description: { fontSize: 15, color: colors.textMuted, lineHeight: 22 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -233,6 +296,19 @@ const styles = StyleSheet.create({
   listButtonIcon: { width: 16, height: 16, tintColor: colors.surface },
   listButtonText: { fontSize: 15, fontWeight: '600', color: colors.primary },
   listButtonTextActive: { color: colors.surface },
+  cookedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  cookedButtonDone: { backgroundColor: colors.background },
+  cookedButtonIcon: { width: 16, height: 16, tintColor: colors.secondary },
+  cookedButtonText: { fontSize: 15, fontWeight: '600', color: colors.primary },
+  cookedButtonTextDone: { color: colors.secondary },
   sectionTitle: { fontSize: 18, fontFamily: 'Spectral_600SemiBold', color: colors.text, marginTop: 12 },
   servingHint: { fontSize: 13, color: colors.textMuted, marginTop: -8 },
   ingredientList: {
