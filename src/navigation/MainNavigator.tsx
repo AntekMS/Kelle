@@ -14,12 +14,14 @@ import ShoppingListScreen from '../features/shopping/ShoppingListScreen';
 import FavoritesScreen from '../features/favorites/FavoritesScreen';
 import DishDetailScreen from '../features/dish/DishDetailScreen';
 import ProfilScreen from '../features/profil/ProfilScreen';
+import ProfilEditScreen from '../features/profil/ProfilEditScreen';
 import SettingsScreen from '../features/settings/SettingsScreen';
 import DatenschutzScreen from '../features/legal/DatenschutzScreen';
 import ImpressumScreen from '../features/legal/ImpressumScreen';
 import ICON_IMAGES from '../components/icon-images';
 import { colors } from '../theme/colors';
 
+// Funktioniert in jedem Stack, der die Route 'Profil' registriert hat (#38).
 function ProfileHeaderButton() {
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   return (
@@ -54,6 +56,7 @@ function FeedNavigator() {
       />
       <FeedStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
       <FeedStack.Screen name="Profil" component={ProfilScreen} options={{ title: 'Mein Profil' }} />
+      <FeedStack.Screen name="ProfilBearbeiten" component={ProfilEditScreen} options={{ title: 'Profil bearbeiten' }} />
       <FeedStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Einstellungen' }} />
       <FeedStack.Screen name="Datenschutz" component={DatenschutzScreen} options={{ title: 'Datenschutzerklärung' }} />
       <FeedStack.Screen name="Impressum" component={ImpressumScreen} options={{ title: 'Impressum' }} />
@@ -64,8 +67,17 @@ function FeedNavigator() {
 function FavoritesNavigator() {
   return (
     <FavStack.Navigator>
-      <FavStack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Favoriten' }} />
+      <FavStack.Screen
+        name="Favorites"
+        component={FavoritesScreen}
+        options={{ title: 'Favoriten', headerRight: () => <ProfileHeaderButton /> }}
+      />
       <FavStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
+      <FavStack.Screen name="Profil" component={ProfilScreen} options={{ title: 'Mein Profil' }} />
+      <FavStack.Screen name="ProfilBearbeiten" component={ProfilEditScreen} options={{ title: 'Profil bearbeiten' }} />
+      <FavStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Einstellungen' }} />
+      <FavStack.Screen name="Datenschutz" component={DatenschutzScreen} options={{ title: 'Datenschutzerklärung' }} />
+      <FavStack.Screen name="Impressum" component={ImpressumScreen} options={{ title: 'Impressum' }} />
     </FavStack.Navigator>
   );
 }
@@ -73,8 +85,17 @@ function FavoritesNavigator() {
 function ShoppingNavigator() {
   return (
     <ShoppingStack.Navigator>
-      <ShoppingStack.Screen name="ShoppingList" component={ShoppingListScreen} options={{ title: 'Einkaufsliste' }} />
+      <ShoppingStack.Screen
+        name="ShoppingList"
+        component={ShoppingListScreen}
+        options={{ title: 'Einkaufsliste', headerRight: () => <ProfileHeaderButton /> }}
+      />
       <ShoppingStack.Screen name="DishDetail" component={DishDetailScreen} options={{ title: 'Rezept' }} />
+      <ShoppingStack.Screen name="Profil" component={ProfilScreen} options={{ title: 'Mein Profil' }} />
+      <ShoppingStack.Screen name="ProfilBearbeiten" component={ProfilEditScreen} options={{ title: 'Profil bearbeiten' }} />
+      <ShoppingStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Einstellungen' }} />
+      <ShoppingStack.Screen name="Datenschutz" component={DatenschutzScreen} options={{ title: 'Datenschutzerklärung' }} />
+      <ShoppingStack.Screen name="Impressum" component={ImpressumScreen} options={{ title: 'Impressum' }} />
     </ShoppingStack.Navigator>
   );
 }
