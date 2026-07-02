@@ -42,3 +42,13 @@ export function formatShoppingAmount(amountBase: number, ing: Ingredient | undef
   }
   return `${Math.round(amountBase)} ${baseUnit}`;
 }
+
+/**
+ * Skaliert eine Original-Rezeptmenge auf die gewählte Portionszahl (#46).
+ * Reine Anzeige-Schicht (DishDetail-Portionsrechner) — die Einkaufsliste
+ * rechnet weiter mit serving_base. Max. 1 Nachkommastelle.
+ */
+export function scaleServingAmount(amount: number, servings: number, servingBase: number): number {
+  if (servingBase <= 0 || servings <= 0) return amount;
+  return Math.round(((amount * servings) / servingBase) * 10) / 10;
+}
