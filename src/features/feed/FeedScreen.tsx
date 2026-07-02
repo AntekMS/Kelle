@@ -6,6 +6,7 @@ import {
   SectionList,
   ActivityIndicator,
   Pressable,
+  Image,
   RefreshControl,
   StyleSheet,
 } from 'react-native';
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import NetInfo from '@react-native-community/netinfo';
 import type { Dish, Ingredient, UserProfile } from '../../types';
 import type { FeedStackParamList, MainTabParamList } from '../../navigation/types';
 import { DISHES } from '../../data/dishes';
@@ -23,17 +25,16 @@ import {
   seedIngredients,
   getAllDishes,
   getAllIngredients,
-  markDishCooked,
   getActiveDishIds,
-  addDishToList,
-  removeDishFromList,
 } from '../../db/database';
-import { fetchDishesFromCloud, fetchIngredientsFromCloud } from '../../db/cloud-catalog';
+import { fetchDishesFromCloud, fetchIngredientsFromCloud, hardenCloudDishes } from '../../db/cloud-catalog';
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import { filterCompatibleDishes } from '../filter/allergen-filter';
 import { rankDishes } from './scoring';
 import { partitionByCooked } from './feed-sections';
-import DishCard from '../../components/DishCard';
+import DishGridCard from '../../components/DishGridCard';
+import FeaturedDishCard from '../../components/FeaturedDishCard';
+import ICON_IMAGES from '../../components/icon-images';
 import { colors } from '../../theme/colors';
 
 function buildActiveIngredientIds(dishes: Dish[], listDishIds: Set<string>): ReadonlySet<string> {
@@ -44,11 +45,19 @@ function buildActiveIngredientIds(dishes: Dish[], listDishIds: Set<string>): Rea
   );
 }
 
+/** Teilt eine Gericht-Liste in Zeilen à 2 für das Grid-Layout. */
+function chunkPairs(dishes: Dish[]): Dish[][] {
+  const rows: Dish[][] = [];
+  for (let i = 0; i < dishes.length; i += 2) rows.push(dishes.slice(i, i + 2));
+  return rows;
+}
+
 type FeedState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | {
       status: 'ready';
+      allDishes: Dish[];
       safeDishes: Dish[];
       rankedDishes: Dish[];
       ingredients: Ingredient[];
@@ -71,24 +80,41 @@ export default function FeedScreen() {
     try {
       await initDatabase();
 
+      // Echter Netzwerk-Status: offline erkennen wir auch, wenn Supabase (fälschlich) antwortet.
+      const net = await NetInfo.fetch();
+      const isOffline = net.isConnected === false;
+
       let cloudDishes: Dish[] = [];
       let cloudIngredients: Ingredient[] = [];
-      let usingOfflineData = false;
-      try {
-        [cloudDishes, cloudIngredients] = await Promise.all([
-          fetchDishesFromCloud(),
-          fetchIngredientsFromCloud(),
-        ]);
-        if (cloudDishes.length === 0) usingOfflineData = true;
-      } catch {
-        usingOfflineData = true;
+      if (!isOffline) {
+        try {
+          [cloudDishes, cloudIngredients] = await Promise.all([
+            fetchDishesFromCloud(),
+            fetchIngredientsFromCloud(),
+          ]);
+        } catch {
+          // Fallback unten über cloudUsable
+        }
       }
 
-      const dishesToSeed = cloudDishes.length > 0 ? cloudDishes : DISHES;
-      const ingredientsToSeed = cloudIngredients.length > 0 ? cloudIngredients : INGREDIENTS;
+      // Cloud-Daten nur als Ganzes übernehmen — eine Teilantwort (Gerichte ohne
+      // Zutaten oder umgekehrt) würde Cloud-Gerichte mit Bundled-Zutaten mischen.
+      const hardenedDishes =
+        cloudDishes.length > 0 && cloudIngredients.length > 0
+          ? hardenCloudDishes(cloudDishes, cloudIngredients)
+          : [];
+      const cloudUsable = hardenedDishes.length > 0;
+      const usingOfflineData = !cloudUsable;
 
-      await seedDishes(dishesToSeed);
-      await seedIngredients(ingredientsToSeed);
+      if (cloudUsable) {
+        await seedDishes(hardenedDishes);
+        await seedIngredients(cloudIngredients);
+      } else if ((await getAllDishes()).length === 0) {
+        // First-Run ohne Cloud: Bundled-Snapshot seeden. Einen bereits gefüllten
+        // (ggf. neueren) Cloud-Cache nie mit dem Bundle überschreiben.
+        await seedDishes(DISHES);
+        await seedIngredients(INGREDIENTS);
+      }
 
       const [allDishes, allIngredients, profile, activeDishIds] = await Promise.all([
         getAllDishes(),
@@ -112,6 +138,7 @@ export default function FeedScreen() {
 
       setState({
         status: 'ready',
+        allDishes,
         safeDishes,
         rankedDishes,
         ingredients: allIngredients,
@@ -133,21 +160,33 @@ export default function FeedScreen() {
     loadFeed();
   }, [loadFeed]);
 
-  const refreshListState = useCallback(async () => {
-    const activeDishIds = await getActiveDishIds();
+  // Beim Zurückkehren (z. B. aus DishDetail) Profil + Einkaufsliste neu laden und neu ranken,
+  // damit dort markierte "gekocht"/Favoriten/Listen-Änderungen im Feed erscheinen.
+  const refreshOnFocus = useCallback(async () => {
+    const [profile, activeDishIds] = await Promise.all([loadProfile(), getActiveDishIds()]);
     const listSet = new Set(activeDishIds);
     setState((prev) => {
-      if (prev.status !== 'ready') return prev;
-      const nextActiveIngredients = buildActiveIngredientIds(prev.safeDishes, listSet);
-      const reranked = rankDishes(prev.safeDishes, prev.profile, prev.ingredients, nextActiveIngredients);
-      return { ...prev, listDishIds: listSet, activeIngredientIds: nextActiveIngredients, rankedDishes: reranked };
+      if (prev.status !== 'ready' || !profile) return prev;
+      // Harten Filter (Allergene/Diät/Equipment/Zeit) mit dem frischen Profil
+      // neu anwenden — nicht nur re-ranken.
+      const safeDishes = filterCompatibleDishes(prev.allDishes, profile);
+      const nextActiveIngredients = buildActiveIngredientIds(prev.allDishes, listSet);
+      const reranked = rankDishes(safeDishes, profile, prev.ingredients, nextActiveIngredients);
+      return {
+        ...prev,
+        profile,
+        safeDishes,
+        listDishIds: listSet,
+        activeIngredientIds: nextActiveIngredients,
+        rankedDishes: reranked,
+      };
     });
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      refreshListState();
-    }, [refreshListState])
+      refreshOnFocus();
+    }, [refreshOnFocus])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -159,26 +198,9 @@ export default function FeedScreen() {
     }
   }, [loadFeed]);
 
-  async function handleMarkCooked(dishId: string) {
-    if (state.status !== 'ready') return;
-    const { safeDishes, ingredients, ingredientMap, profile, listDishIds, activeIngredientIds } = state;
-    if (profile.cooked_dish_ids.includes(dishId)) return; // already cooked — keep idempotent
-
-    await markDishCooked(dishId);
-    const updated: UserProfile = {
-      ...profile,
-      cooked_dish_ids: [...profile.cooked_dish_ids, dishId],
-      updated_at: new Date().toISOString(),
-    };
-    await saveProfile(updated);
-
-    const rankedDishes = rankDishes(safeDishes, updated, ingredients, activeIngredientIds);
-    setState({ ...state, rankedDishes, profile: updated, ingredientMap, listDishIds, activeIngredientIds });
-  }
-
   async function handleToggleFavorite(dishId: string) {
     if (state.status !== 'ready') return;
-    const { safeDishes, ingredients, ingredientMap, profile, listDishIds, activeIngredientIds } = state;
+    const { safeDishes, ingredients, profile, activeIngredientIds } = state;
 
     const isFav = profile.favorites.includes(dishId);
     const favorites = isFav
@@ -188,43 +210,28 @@ export default function FeedScreen() {
     await saveProfile(updated);
 
     const rankedDishes = rankDishes(safeDishes, updated, ingredients, activeIngredientIds);
-    setState({ ...state, rankedDishes, profile: updated, ingredientMap, listDishIds, activeIngredientIds });
-  }
-
-  async function handleToggleShoppingList(dishId: string) {
-    if (state.status !== 'ready') return;
-    const { safeDishes, rankedDishes, ingredients, ingredientMap, profile, listDishIds } = state;
-
-    const dish = rankedDishes.find((d) => d.id === dishId);
-    if (!dish) return;
-
-    const next = new Set(listDishIds);
-    if (listDishIds.has(dishId)) {
-      await removeDishFromList(dishId, ingredientMap);
-      next.delete(dishId);
-    } else {
-      await addDishToList(dish, ingredientMap);
-      next.add(dishId);
-    }
-
-    const nextActiveIngredients = buildActiveIngredientIds(safeDishes, next);
-    const reranked = rankDishes(safeDishes, profile, ingredients, nextActiveIngredients);
-    setState({ ...state, rankedDishes: reranked, listDishIds: next, activeIngredientIds: nextActiveIngredients });
+    setState({ ...state, rankedDishes, profile: updated });
   }
 
   // Hooks müssen vor den frühen Returns laufen (Rules of Hooks) — daher hier oben,
   // mit Status-Guard im Memo statt nach dem loading/error-Return.
   const query = searchQuery.trim().toLowerCase();
-  const sections = useMemo(() => {
-    if (state.status !== 'ready') return [];
+  const { featured, sections } = useMemo(() => {
+    if (state.status !== 'ready') return { featured: null as Dish | null, sections: [] as { title: string; data: Dish[][] }[] };
     const visibleDishes = query
       ? state.rankedDishes.filter((d) => d.name.toLowerCase().includes(query))
       : state.rankedDishes;
     const { forYou, cooked } = partitionByCooked(visibleDishes, state.profile.cooked_dish_ids);
-    const result: { title: string; data: Dish[] }[] = [];
-    if (forYou.length > 0) result.push({ title: 'Für dich', data: forYou });
-    if (cooked.length > 0) result.push({ title: 'Schon gekocht', data: cooked });
-    return result;
+
+    // Featured nur ohne aktive Suche und wenn es Empfehlungen gibt.
+    const useFeatured = !query && forYou.length > 0;
+    const featuredDish = useFeatured ? forYou[0] : null;
+    const forYouGrid = useFeatured ? forYou.slice(1) : forYou;
+
+    const result: { title: string; data: Dish[][] }[] = [];
+    if (forYouGrid.length > 0) result.push({ title: 'Für dich', data: chunkPairs(forYouGrid) });
+    if (cooked.length > 0) result.push({ title: 'Schon gekocht', data: chunkPairs(cooked) });
+    return { featured: featuredDish, sections: result };
   }, [state, query]);
 
   if (state.status === 'loading') {
@@ -246,7 +253,7 @@ export default function FeedScreen() {
     );
   }
 
-  const { rankedDishes, profile, listDishIds, usingOfflineData, ingredientMap } = state;
+  const { profile, listDishIds, usingOfflineData, ingredientMap } = state;
 
   // Section-Header nur zeigen, wenn es wirklich zwei Gruppen gibt (sonst schlichte Liste).
   const showSectionHeaders = sections.length > 1;
@@ -275,10 +282,21 @@ export default function FeedScreen() {
     </View>
   ) : null;
 
-  const header = (listBanner || offlineBanner) ? (
+  const featuredCard = featured ? (
+    <FeaturedDishCard
+      dish={featured}
+      isFavorite={profile.favorites.includes(featured.id)}
+      onToggleFavorite={handleToggleFavorite}
+      onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
+      ingredientMap={ingredientMap}
+    />
+  ) : null;
+
+  const header = (offlineBanner || listBanner || featuredCard) ? (
     <View>
       {offlineBanner}
       {listBanner}
+      {featuredCard}
     </View>
   ) : null;
 
@@ -297,9 +315,9 @@ export default function FeedScreen() {
           accessibilityLabel="Gericht suchen"
         />
       </View>
-      <SectionList
+      <SectionList<Dish[], { title: string; data: Dish[][] }>
         sections={sections}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(pair) => pair.map((d) => d.id).join('-')}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
         stickySectionHeadersEnabled={false}
@@ -308,37 +326,51 @@ export default function FeedScreen() {
         renderSectionHeader={({ section }) =>
           showSectionHeaders ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
         }
-        renderItem={({ item }) => (
-          <DishCard
-            dish={item}
-            isCooked={profile.cooked_dish_ids.includes(item.id)}
-            isInShoppingList={listDishIds.has(item.id)}
-            isFavorite={profile.favorites.includes(item.id)}
-            onMarkCooked={handleMarkCooked}
-            onToggleShoppingList={handleToggleShoppingList}
-            onToggleFavorite={handleToggleFavorite}
-            onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
-            ingredientMap={ingredientMap}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            {query ? (
-              <>
-                <Text style={styles.emptyTitle}>Keine Treffer</Text>
-                <Text style={styles.emptySubtitle}>
-                  Für „{searchQuery.trim()}" wurde kein Gericht gefunden.
-                </Text>
-              </>
+        renderItem={({ item: pair }) => (
+          <View style={styles.row}>
+            <DishGridCard
+              dish={pair[0]}
+              isCooked={profile.cooked_dish_ids.includes(pair[0].id)}
+              isFavorite={profile.favorites.includes(pair[0].id)}
+              onToggleFavorite={handleToggleFavorite}
+              onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
+              ingredientMap={ingredientMap}
+            />
+            {pair[1] ? (
+              <DishGridCard
+                dish={pair[1]}
+                isCooked={profile.cooked_dish_ids.includes(pair[1].id)}
+                isFavorite={profile.favorites.includes(pair[1].id)}
+                onToggleFavorite={handleToggleFavorite}
+                onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
+                ingredientMap={ingredientMap}
+              />
             ) : (
-              <>
-                <Text style={styles.emptyTitle}>Keine Gerichte verfügbar.</Text>
-                <Text style={styles.emptySubtitle}>
-                  Alle Gerichte wurden aufgrund deiner Einstellungen gefiltert.
-                </Text>
-              </>
+              <View style={styles.gridSpacer} />
             )}
           </View>
+        )}
+        ListEmptyComponent={
+          featured ? null : (
+            <View style={styles.empty}>
+              <Image source={ICON_IMAGES.pan} style={styles.emptyIcon} resizeMode="contain" />
+              {query ? (
+                <>
+                  <Text style={styles.emptyTitle}>Keine Treffer</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Für „{searchQuery.trim()}" wurde kein Gericht gefunden.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.emptyTitle}>Noch nichts Passendes</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Alle Gerichte wurden aufgrund deiner Einstellungen gefiltert. Passe dein Profil an, um mehr zu entdecken.
+                  </Text>
+                </>
+              )}
+            </View>
+          )
         }
       />
     </View>
@@ -371,14 +403,16 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   list: { padding: 16, backgroundColor: colors.background },
+  row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  gridSpacer: { flex: 1 },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
     backgroundColor: colors.background,
   },
   offlineBanner: {
@@ -403,6 +437,7 @@ const styles = StyleSheet.create({
   listBannerText: { fontSize: 15, fontWeight: '600', color: colors.surface },
   listBannerArrow: { fontSize: 20, color: colors.primaryMuted, fontWeight: '300' },
   empty: { marginTop: 80, alignItems: 'center', gap: 12, paddingHorizontal: 32 },
+  emptyIcon: { width: 56, height: 56, tintColor: colors.primaryMuted, marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
   emptySubtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 21 },
 });
