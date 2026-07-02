@@ -1,5 +1,5 @@
 import type { Dish } from '../../../types';
-import { partitionByCooked } from '../feed-sections';
+import { partitionByCooked, stabilizeRanking } from '../feed-sections';
 
 function dish(id: string): Dish {
   return {
@@ -46,5 +46,37 @@ describe('partitionByCooked', () => {
     const { forYou, cooked } = partitionByCooked([], ['x']);
     expect(forYou).toHaveLength(0);
     expect(cooked).toHaveLength(0);
+  });
+});
+
+describe('stabilizeRanking (#44)', () => {
+  test('bewahrt die bisherige Reihenfolge, auch wenn das Ranking sie ändern würde', () => {
+    const prev = [dish('a'), dish('b'), dish('c')];
+    const next = [dish('c'), dish('a'), dish('b')]; // Re-Ranking hätte c hochsortiert
+    expect(stabilizeRanking(prev, next).map((d) => d.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('neu kompatible Gerichte werden hinten in Ranking-Reihenfolge angefügt', () => {
+    const prev = [dish('a'), dish('b')];
+    const next = [dish('x'), dish('a'), dish('y'), dish('b')];
+    expect(stabilizeRanking(prev, next).map((d) => d.id)).toEqual(['a', 'b', 'x', 'y']);
+  });
+
+  test('herausgefilterte Gerichte fallen raus (harter Filter gewinnt)', () => {
+    const prev = [dish('a'), dish('b'), dish('c')];
+    const next = [dish('c'), dish('a')]; // b z. B. durch neue Allergie gefiltert
+    expect(stabilizeRanking(prev, next).map((d) => d.id)).toEqual(['a', 'c']);
+  });
+
+  test('liefert die frischen Dish-Objekte aus nextRanked, nicht die alten', () => {
+    const prev = [dish('a')];
+    const freshA = { ...dish('a'), name: 'frisch' };
+    const result = stabilizeRanking(prev, [freshA]);
+    expect(result[0]).toBe(freshA);
+  });
+
+  test('leere vorherige Reihenfolge → komplette Ranking-Reihenfolge', () => {
+    const next = [dish('b'), dish('a')];
+    expect(stabilizeRanking([], next).map((d) => d.id)).toEqual(['b', 'a']);
   });
 });
