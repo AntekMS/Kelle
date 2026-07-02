@@ -26,6 +26,8 @@ import {
   getAllDishes,
   getAllIngredients,
   getActiveDishIds,
+  addDishToList,
+  removeDishFromList,
 } from '../../db/database';
 import { fetchDishesFromCloud, fetchIngredientsFromCloud, hardenCloudDishes } from '../../db/cloud-catalog';
 import { loadProfile, saveProfile } from '../../store/profile-store';
@@ -217,6 +219,28 @@ export default function FeedScreen() {
     setState({ ...state, profile: updated });
   }
 
+  async function handleToggleShoppingList(dishId: string) {
+    if (state.status !== 'ready') return;
+    const { allDishes, ingredientMap, listDishIds } = state;
+    const dish = allDishes.find((d) => d.id === dishId);
+    if (!dish) return;
+
+    const inList = listDishIds.has(dishId);
+    if (inList) await removeDishFromList(dishId, ingredientMap);
+    else await addDishToList(dish, ingredientMap);
+
+    const nextListIds = new Set(listDishIds);
+    if (inList) nextListIds.delete(dishId);
+    else nextListIds.add(dishId);
+
+    // Kein Re-Ranking (#44) — overlapBonus fließt erst beim nächsten Refresh ein.
+    setState({
+      ...state,
+      listDishIds: nextListIds,
+      activeIngredientIds: buildActiveIngredientIds(allDishes, nextListIds),
+    });
+  }
+
   // Hooks müssen vor den frühen Returns laufen (Rules of Hooks) — daher hier oben,
   // mit Status-Guard im Memo statt nach dem loading/error-Return.
   const query = searchQuery.trim().toLowerCase();
@@ -339,6 +363,8 @@ export default function FeedScreen() {
               onToggleFavorite={handleToggleFavorite}
               onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
               ingredientMap={ingredientMap}
+              isInList={listDishIds.has(pair[0].id)}
+              onToggleList={handleToggleShoppingList}
             />
             {pair[1] ? (
               <DishGridCard
@@ -348,6 +374,8 @@ export default function FeedScreen() {
                 onToggleFavorite={handleToggleFavorite}
                 onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
                 ingredientMap={ingredientMap}
+                isInList={listDishIds.has(pair[1].id)}
+                onToggleList={handleToggleShoppingList}
               />
             ) : (
               <View style={styles.gridSpacer} />
@@ -402,7 +430,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    // Feste Höhe statt paddingVertical: TextInput zentriert den Text sonst
+    // nicht zuverlässig (#42, iOS vs. Android).
+    height: 46,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
     fontSize: 15,
     color: colors.text,
   },
