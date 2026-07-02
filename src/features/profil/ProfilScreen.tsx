@@ -102,6 +102,18 @@ export default function ProfilScreen() {
     >
       <Text style={styles.privacyNote}>Diese Daten bleiben auf deinem Gerät.</Text>
 
+      <View style={styles.card}>
+        <Pressable
+          style={styles.row}
+          onPress={() => navigation.navigate('ProfilBearbeiten')}
+          accessibilityLabel="Profil bearbeiten"
+          accessibilityRole="button"
+        >
+          <Text style={styles.rowTitle}>Profil bearbeiten</Text>
+          <Text style={styles.arrow}>›</Text>
+        </Pressable>
+      </View>
+
       <Text style={styles.sectionHeader}>Ernährung & Allergien</Text>
       <View style={styles.card}>
         <SummaryRow label="Ernährungsweise" value={DIET_LABELS[profile.diet]} />
