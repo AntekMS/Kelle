@@ -57,8 +57,10 @@ src/
                     #   genutzt von database.ts (Einkaufsliste) UND scoring.ts (Nährwerte)
                     # formatShoppingAmount(amountBase, ing) — Anzeige-Formatierung der Einkaufsliste:
                     #   zählbare Zutaten (stueck-Konversion) → "n Stück", sonst g/ml bzw. kg/l ab 1000
+                    # scaleServingAmount(amount, servings, servingBase) — Portionsrechner (#46),
+                    #   reine Anzeige-Skalierung in DishDetail (max 1 Nachkommastelle)
     __tests__/
-      units.test.ts # 9 Tests: normalizeToBase + formatShoppingAmount (Stück/kg/l/Fallback)
+      units.test.ts # 13 Tests: normalizeToBase + formatShoppingAmount + scaleServingAmount
     policy.ts       # CURRENT_POLICY_VERSION Konstante — importiert in ConsentScreen, SettingsScreen, DatenschutzScreen, App.tsx
     labels.ts       # Zentrale DE-Anzeige-Labels: DIET_LABELS, GOAL_LABELS, ALLERGEN_LABELS,
                     #   EQUIPMENT_LABELS (aus EQUIPMENT_META abgeleitet — kein Drift)/equipmentLabel,
@@ -83,7 +85,10 @@ src/
                       #   + 2-Spalten-Grid aus DishGridCard. SectionList behält 'Für dich'/'Schon gekocht',
                       #   aber section.data = Dish[][] (chunkPairs à 2); renderItem = row mit 2 Grid-Karten
                       #   (leerer gridSpacer bei ungerader Anzahl). Bei aktiver Suche: kein Featured.
-                      # Karten haben nur noch Herz (Favorit) — Liste/Gekocht liegen auf DishDetail
+                      # Karten: Herz (Favorit) + Plus/Haken für Einkaufsliste (#41) — Gekocht liegt auf DishDetail
+                      # STABILE REIHENFOLGE (#44): Favorit-/Listen-Toggles + refreshOnFocus ranken
+                      #   NICHT neu (stabilizeRanking) — neu sortiert nur bei loadFeed()/Pull-to-Refresh.
+                      #   Der harte Filter greift trotzdem bei JEDEM Fokus (Stabilität = nur Sortierung!)
                       # Suchfeld (TextInput über Liste) → client-seitiger Name-Filter auf rankedDishes
                       # Header-Banner bei nicht-leerer Liste → cross-tab zu ShoppingTab (getParent)
                       # Offline: NetInfo.fetch() (echter Netzstatus) ODER Cloud-Fetch fehlschlägt/leer → usingOfflineData
@@ -92,10 +97,12 @@ src/
                       #   (First-Run) — nie einen gefüllten Cloud-Cache mit dem Bundle überschreiben
                       # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
                       # useFocusEffect → refreshOnFocus(): Profil + Liste neu laden, harten Filter
-                      #   (filterCompatibleDishes auf allDishes im State) NEU anwenden + neu ranken
-                      #   (übernimmt in DishDetail markierte gekocht/Favorit/Listen-Änderungen)
+                      #   (filterCompatibleDishes auf allDishes im State) NEU anwenden; Reihenfolge
+                      #   bleibt stabil via stabilizeRanking (übernimmt DishDetail-/Profil-Änderungen)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
       feed-sections.ts # partitionByCooked(dishes, cookedIds) → { forYou, cooked } (UI-Aufteilung, Reihenfolge erhalten)
+                       # stabilizeRanking(prevOrder, nextRanked) — stabile Feed-Reihenfolge (#44):
+                       #   bestehende Positionen bleiben, neu Kompatibles hinten dran, Gefiltertes fällt raus
       scoring.ts      # score = ziel_fit × machbarkeit × repetition_penalty + favBonus + overlapBonus
                       # machbarkeit zählt NEUE Techniken aus techniques_required ∪ {technique_taught}
                       #   minus profile.skill_techniques (countNewTechniques, exportiert)
@@ -103,7 +110,7 @@ src/
                       #   pro Portion; genutzt von ziel_fit, DishCard und DishDetailScreen
       __tests__/
         scoring.test.ts  # 32 Tests: scoreDish + rankDishes + computeNutritionPerServing
-        feed-sections.test.ts # 4 Tests: partitionByCooked (Aufteilung, Reihenfolge, Randfälle)
+        feed-sections.test.ts # 9 Tests: partitionByCooked + stabilizeRanking (#44)
     filter/
       allergen-filter.ts               # 4 harte Filter + filterCompatibleDishes
       __tests__/allergen-filter.test.ts # 22 Tests — alle grün
@@ -111,21 +118,29 @@ src/
       FavoritesScreen.tsx  # 2-Spalten-Grid (DishGridCard, chunkPairs) von profile.favorites
                            # Kein Scoring/Ranking; Herz entfernt Gericht direkt; catchy Empty-State (Icon)
                            # useFocusEffect → vollständiger Reload beim Tab-Wechsel (SQLite-only)
+                           # Plus/Haken auf den Karten toggelt Einkaufsliste (#41, eigener listDishIds-State)
     shopping/
       ShoppingListScreen.tsx  # Eigener Tab (ShoppingStack); Gerichte-Card mit Thumbnail + antippbar → DishDetail
                               # Zutaten gruppiert nach aisle_category; Mengen via formatShoppingAmount
                               # useFocusEffect → Reload beim Tab-Fokus; "Leeren" lädt neu (kein goBack)
     dish/
       DishDetailScreen.tsx    # Rezept-Screen (Param dishId): Hero, Herz-Favorit (neben Name), Nährwerte,
-                              # Zutaten (Originalmengen), nummerierte Schritte,
+                              # Zutaten mit Portions-Stepper (#46: 1–8, scaleServingAmount skaliert NUR
+                              #   die Anzeige; Nährwerte bleiben pro Portion, Liste bei serving_base),
+                              # nummerierte Schritte,
                               # "+ Zur Einkaufsliste"-Toggle + "Als gekocht markieren" (#33, lädt Profil)
                               # Profil-Mutationen über updateProfile (profileRef + serialisierte
                               #   saveProfile-Queue) — Herz + „gekocht" können sich nicht überschreiben
                               # in FeedStack, FavStack und ShoppingStack registriert
     profil/
-      ProfilScreen.tsx        # Read-only Profil (FeedStack-Route 'Profil', via Header-Button im Feed):
+      ProfilScreen.tsx        # Read-only Profil (Route 'Profil', via Header-Button in Feed/Fav/Shopping — #38):
                               # Ernährung/Allergien, Ziele/Zeitbudget, Küche, Verlauf gekochter Gerichte
-                              #   (antippbar → DishDetail), Link → Settings (navigate im FeedStack, Back-Stack bleibt — #30). Labels aus lib/labels.
+                              #   (antippbar → DishDetail), Row → ProfilBearbeiten, Link → Settings
+                              #   (navigate im selben Stack, Back-Stack bleibt — #30). Labels aus lib/labels.
+      ProfilEditScreen.tsx    # Profil bearbeiten (#38): Diät (Radio), Allergien (AllergenChip/EU14),
+                              # Ziele ('none' exklusiv wie ZielScreen), Zeitbudget (15/30/60 wie Onboarding),
+                              # Geräte (EQUIPMENT_META) → saveProfile; Consent/Verlauf unangetastet.
+                              # Feed übernimmt Änderungen via refreshOnFocus (harter Filter bei Fokus)
     settings/
       SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export via Share, Löschen) + Links zu Datenschutz/Impressum
                               # Export umfasst Profil + SQLite-Einkaufsliste (Parität zur Löschung, Art. 15/20)
@@ -138,9 +153,11 @@ src/
     DishGridCard.tsx   # Kompakte Grid-Karte (Feed + Favoriten): Bild (aspectRatio 4:3),
                       #   Herz-Overlay + Gekocht-Badge auf dem Bild, Name (1 Zeile) + Meta (Zeit·kcal)
                       #   Ganze Karte onPress → DishDetail; flex:1 (Grid-Zelle); PressableScale
-                      #   Nur Favorit on-card — Liste/Gekocht liegen auf DishDetail
+                      #   Optionaler Plus/Haken-Button (#41: isInList/onToggleList) toggelt Einkaufsliste
+                      #   direkt on-card — Gekocht liegt weiter auf DishDetail
     FeaturedDishCard.tsx # Große Hero-Karte oben im Feed ('FÜR DICH HEUTE'): volles Bild, Text-Overlay
-                      #   (Eyebrow/Name/Meta Zeit·kcal·Protein), Herz-Overlay; onPress → DishDetail
+                      #   (Eyebrow/Name 1-zeilig/Meta Zeit·kcal·Protein), Herz-Overlay; onPress → DishDetail
+                      #   Overlay ≤ ~1/3 Bildhöhe (#40) mit Pseudo-Verlauf (rgba-Streifen, keine neue Dependency)
                       # (DishCard.tsx entfernt — durch die beiden Karten oben ersetzt)
                       # Alle Icons via ICON_IMAGES (keine Emoji-Zeichen)
     PressableScale.tsx # Pressable-Ersatz mit dezentem Scale-Feedback (Animated, useNativeDriver)
@@ -155,10 +172,10 @@ src/
     OnboardingContext.tsx   # React Context — Datentransport über alle 7 Screens
     OnboardingNavigator.tsx # Bindet alle 7 Screens + OnboardingProvider ein
     MainNavigator.tsx       # Bottom-Tab-Navigator (4 Tabs) + nested Stacks:
-                            #   FeedTab: FeedStack (Feed → DishDetail, Profil, Settings/Datenschutz/Impressum); Feed hat headerRight → ProfileHeaderButton
-                            #     Settings-Trio auch im FeedStack registriert → Profil→Einstellungen pusht in den Stack (Back-Swipe bleibt erhalten — #30)
-                            #   FavoritesTab: FavStack (Favorites → DishDetail)
-                            #   ShoppingTab: ShoppingStack (ShoppingList → DishDetail)
+                            #   FeedTab/FavoritesTab/ShoppingTab: je eigener Stack mit Root → DishDetail,
+                            #     Profil, ProfilBearbeiten, Settings/Datenschutz/Impressum (#38/#30 —
+                            #     ProfileHeaderButton als headerRight auf allen 3 Root-Screens,
+                            #     Navigation pusht im selben Stack, Back-Swipe bleibt)
                             #   SettingsTab: SettingsStack (Settings → Datenschutz → Impressum)
                             #   DishDetail in 3 Stacks registriert (Param { dishId })
                             #   Feed-Banner navigiert cross-tab via getParent() → ShoppingTab
@@ -275,7 +292,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 128 Tests grün (scoring, profile-store, database, cloud-catalog, allergen-filter, units, equipment, labels, feed-sections) |
+| Test-Suite | ✅ 137 Tests grün (scoring, profile-store, database, cloud-catalog, allergen-filter, units, equipment, labels, feed-sections) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
@@ -297,6 +314,10 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Catchy Empty-States (Issue #34) | ✅ done — Icon + Text auf Feed/Favoriten/Einkauf |
 | Offline-Erkennung via NetInfo (Issue #18) | ✅ done — NetInfo.fetch() im Feed; Geräte-Verifikation über Mobilfunk noch offen |
 | Security-/Bug-Review-Fixes (02.07.2026) | ✅ done — Cloud-Daten-Validierung + Allergen-Härtung (fail-safe), Cloud/Bundled-Seeding konsistent, harter Filter bei Fokus neu, DishDetail-Profil-Races (Ref + Save-Queue), markDishCooked idempotent, Duplikat-Zutaten summiert, DSGVO-Export inkl. Einkaufsliste, GitHub-PAT aus .env entfernt |
+| Stabile Feed-Reihenfolge (Issue #44) | ✅ done — stabilizeRanking; Re-Ranking nur bei Refresh; harter Filter weiter bei jedem Fokus |
+| Feed-Polish (Issues #40/#41/#42) | ✅ done — Featured-Overlay ≤ 1/3, Suchfeld zentriert, Plus-Button auf Grid-Karten (Feed + Favoriten) |
+| Profil editierbar + überall erreichbar (Issue #38) | ✅ done — ProfilEditScreen (Diät/Allergien/Ziele/Zeit/Geräte); ProfileHeaderButton in Feed/Fav/Shopping |
+| Portionsrechner in DishDetail (Issue #46) | ✅ done — Stepper 1–8, scaleServingAmount (Anzeige-Schicht); Liste bleibt bei serving_base |
 | App-Store-Identität + EAS (Issue #16) | 🟡 teilw. — bundleId/package/Splash in app.json + eas.json angelegt; Developer-Accounts + Store-Metadaten offen |
 | Rechtliche Angaben (Issue #15) | 🟡 teilw. — "EU-Hosting"-Falschaussage korrigiert; Kontaktdaten-Platzhalter offen (Nutzer-Daten nötig) |
 
@@ -336,7 +357,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 ```bash
 npx expo start          # Dev-Server
 npx expo start --ios    # iOS-Simulator
-npx jest                # Tests (128 grün)
+npx jest                # Tests (137 grün)
 npx tsc --noEmit        # Typcheck (0 Fehler)
 ```
 
