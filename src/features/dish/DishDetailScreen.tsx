@@ -20,6 +20,7 @@ import {
   markDishCooked,
 } from '../../db/database';
 import { loadProfile, saveProfile } from '../../store/profile-store';
+import { scaleServingAmount } from '../../lib/units';
 import { computeNutritionPerServing } from '../feed/scoring';
 import { colors } from '../../theme/colors';
 import PressableScale from '../../components/PressableScale';
@@ -36,9 +37,12 @@ const UNIT_LABELS: Record<string, string> = {
   tl: 'TL',
 };
 
-function formatIngredientAmount(di: DishIngredient): string {
+const MIN_SERVINGS = 1;
+const MAX_SERVINGS = 8;
+
+function formatIngredientAmount(di: DishIngredient, servings: number, servingBase: number): string {
   const label = UNIT_LABELS[di.unit] ?? di.unit;
-  return `${di.amount} ${label}`;
+  return `${scaleServingAmount(di.amount, servings, servingBase)} ${label}`;
 }
 
 export default function DishDetailScreen() {
@@ -50,6 +54,7 @@ export default function DishDetailScreen() {
   const [ingredientMap, setIngredientMap] = useState<Map<string, Ingredient>>(new Map());
   const [inList, setInList] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [servings, setServings] = useState(1);
   const [loading, setLoading] = useState(true);
   // Jüngster Profil-Stand für Mutationen — der Render-Snapshot in `profile`
   // hinkt bei schnellen aufeinanderfolgenden Taps hinterher (Lost Update).
@@ -65,6 +70,7 @@ export default function DishDetailScreen() {
       loadProfile(),
     ]);
     setDish(loadedDish);
+    if (loadedDish) setServings(loadedDish.serving_base);
     setIngredientMap(new Map(allIngredients.map((i) => [i.id, i])));
     setInList(activeIds.includes(dishId));
     profileRef.current = loadedProfile;
@@ -245,14 +251,45 @@ export default function DishDetailScreen() {
         </Pressable>
 
         <Text style={styles.sectionTitle}>Zutaten</Text>
-        <Text style={styles.servingHint}>für {dish.serving_base} {dish.serving_base === 1 ? 'Portion' : 'Portionen'}</Text>
+        <View style={styles.servingStepper}>
+          <Pressable
+            style={[styles.stepperButton, servings <= MIN_SERVINGS && styles.stepperButtonDisabled]}
+            onPress={() => setServings((s) => Math.max(MIN_SERVINGS, s - 1))}
+            disabled={servings <= MIN_SERVINGS}
+            hitSlop={8}
+            accessibilityLabel="Eine Portion weniger"
+            accessibilityRole="button"
+          >
+            <Text style={styles.stepperButtonText}>−</Text>
+          </Pressable>
+          <Text style={styles.stepperValue}>
+            {servings} {servings === 1 ? 'Portion' : 'Portionen'}
+          </Text>
+          <Pressable
+            style={[styles.stepperButton, servings >= MAX_SERVINGS && styles.stepperButtonDisabled]}
+            onPress={() => setServings((s) => Math.min(MAX_SERVINGS, s + 1))}
+            disabled={servings >= MAX_SERVINGS}
+            hitSlop={8}
+            accessibilityLabel="Eine Portion mehr"
+            accessibilityRole="button"
+          >
+            <Text style={styles.stepperButtonText}>+</Text>
+          </Pressable>
+        </View>
+        {servings !== dish.serving_base && (
+          <Text style={styles.servingHint}>
+            Mengen für {servings} {servings === 1 ? 'Portion' : 'Portionen'} umgerechnet (Rezept: {dish.serving_base})
+          </Text>
+        )}
         <View style={styles.ingredientList}>
           {dish.ingredients.map((di) => {
             const ing = ingredientMap.get(di.ingredient_id);
             return (
               <View key={di.ingredient_id} style={styles.ingredientRow}>
                 <Text style={styles.ingredientName}>{ing?.name ?? di.ingredient_id}</Text>
-                <Text style={styles.ingredientAmount}>{formatIngredientAmount(di)}</Text>
+                <Text style={styles.ingredientAmount}>
+                  {formatIngredientAmount(di, servings, dish.serving_base)}
+                </Text>
               </View>
             );
           })}
@@ -331,7 +368,30 @@ const styles = StyleSheet.create({
   cookedButtonText: { fontSize: 15, fontWeight: '600', color: colors.primary },
   cookedButtonTextDone: { color: colors.secondary },
   sectionTitle: { fontSize: 18, fontFamily: 'Spectral_600SemiBold', color: colors.text, marginTop: 12 },
-  servingHint: { fontSize: 13, color: colors.textMuted, marginTop: -8 },
+  servingStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  stepperButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperButtonDisabled: { opacity: 0.35 },
+  stepperButtonText: { fontSize: 20, lineHeight: 22, color: colors.primary, fontWeight: '500' },
+  stepperValue: { fontSize: 15, fontWeight: '600', color: colors.text, minWidth: 100, textAlign: 'center' },
+  servingHint: { fontSize: 13, color: colors.textMuted, marginTop: -4 },
   ingredientList: {
     backgroundColor: colors.surface,
     borderRadius: 12,

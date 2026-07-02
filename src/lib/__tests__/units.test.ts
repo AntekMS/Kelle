@@ -1,5 +1,5 @@
 import type { Ingredient } from '../../types';
-import { normalizeToBase, formatShoppingAmount } from '../units';
+import { normalizeToBase, formatShoppingAmount, scaleServingAmount } from '../units';
 
 const mlIngredient: Ingredient = {
   id: 'oil',
@@ -78,5 +78,26 @@ describe('formatShoppingAmount (Anzeige-Formatierung)', () => {
 
   test('fehlendes Ingredient → fällt auf g zurück (kein Crash)', () => {
     expect(formatShoppingAmount(300, undefined)).toBe('300 g');
+  });
+});
+
+describe('scaleServingAmount (Portionsrechner #46)', () => {
+  test('skaliert linear über die Portionszahl', () => {
+    expect(scaleServingAmount(200, 4, 2)).toBe(400);
+    expect(scaleServingAmount(200, 1, 2)).toBe(100);
+  });
+
+  test('unveränderte Portionszahl → Originalmenge', () => {
+    expect(scaleServingAmount(150, 2, 2)).toBe(150);
+  });
+
+  test('rundet auf max. 1 Nachkommastelle', () => {
+    expect(scaleServingAmount(1, 1, 3)).toBe(0.3);
+    expect(scaleServingAmount(2, 5, 3)).toBe(3.3);
+  });
+
+  test('ungültige Basis → Originalmenge (kein NaN/Infinity)', () => {
+    expect(scaleServingAmount(100, 2, 0)).toBe(100);
+    expect(scaleServingAmount(100, 0, 2)).toBe(100);
   });
 });
