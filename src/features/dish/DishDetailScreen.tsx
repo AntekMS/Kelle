@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -51,6 +51,11 @@ export default function DishDetailScreen() {
   const [inList, setInList] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Jüngster Profil-Stand für Mutationen — der Render-Snapshot in `profile`
+  // hinkt bei schnellen aufeinanderfolgenden Taps hinterher (Lost Update).
+  const profileRef = useRef<UserProfile | null>(null);
+  const saveQueue = useRef(Promise.resolve());
+  const markingCooked = useRef(false);
 
   const load = useCallback(async () => {
     const [loadedDish, allIngredients, activeIds, loadedProfile] = await Promise.all([
@@ -62,6 +67,7 @@ export default function DishDetailScreen() {
     setDish(loadedDish);
     setIngredientMap(new Map(allIngredients.map((i) => [i.id, i])));
     setInList(activeIds.includes(dishId));
+    profileRef.current = loadedProfile;
     setProfile(loadedProfile);
     setLoading(false);
   }, [dishId]);
@@ -84,26 +90,41 @@ export default function DishDetailScreen() {
     }
   }
 
-  async function handleToggleFavorite() {
-    if (!profile) return;
-    const favorites = isFavorite
-      ? profile.favorites.filter((id) => id !== dishId)
-      : [...profile.favorites, dishId];
-    const updated: UserProfile = { ...profile, favorites, updated_at: new Date().toISOString() };
+  // Gemeinsamer Mutations-Pfad: liest den jüngsten Stand aus profileRef und
+  // serialisiert die SecureStore-Writes, damit sich Herz + „gekocht" nicht
+  // gegenseitig überschreiben.
+  const updateProfile = useCallback(async (mutate: (p: UserProfile) => UserProfile) => {
+    const current = profileRef.current;
+    if (!current) return;
+    const updated: UserProfile = { ...mutate(current), updated_at: new Date().toISOString() };
+    profileRef.current = updated;
     setProfile(updated);
-    await saveProfile(updated);
+    saveQueue.current = saveQueue.current.then(() => saveProfile(updated));
+    await saveQueue.current;
+  }, []);
+
+  async function handleToggleFavorite() {
+    await updateProfile((p) => ({
+      ...p,
+      favorites: p.favorites.includes(dishId)
+        ? p.favorites.filter((id) => id !== dishId)
+        : [...p.favorites, dishId],
+    }));
   }
 
   async function handleMarkCooked() {
-    if (!profile || isCooked) return;
-    await markDishCooked(dishId);
-    const updated: UserProfile = {
-      ...profile,
-      cooked_dish_ids: [...profile.cooked_dish_ids, dishId],
-      updated_at: new Date().toISOString(),
-    };
-    setProfile(updated);
-    await saveProfile(updated);
+    if (markingCooked.current || profileRef.current?.cooked_dish_ids.includes(dishId)) return;
+    markingCooked.current = true;
+    try {
+      await markDishCooked(dishId);
+      await updateProfile((p) =>
+        p.cooked_dish_ids.includes(dishId)
+          ? p
+          : { ...p, cooked_dish_ids: [...p.cooked_dish_ids, dishId] }
+      );
+    } finally {
+      markingCooked.current = false;
+    }
   }
 
   if (loading) {

@@ -150,10 +150,14 @@ export async function getDishById(id: string): Promise<Dish | null> {
 
 export async function markDishCooked(dishId: string): Promise<void> {
   const database = getDb();
+  // Idempotent: ein Doppel-Tap darf keine zweite History-Zeile anlegen.
   await database.runAsync(
-    'INSERT INTO cooked_history (dish_id, cooked_at) VALUES (?, ?)',
+    `INSERT INTO cooked_history (dish_id, cooked_at)
+     SELECT ?, ?
+     WHERE NOT EXISTS (SELECT 1 FROM cooked_history WHERE dish_id = ?)`,
     dishId,
-    new Date().toISOString()
+    new Date().toISOString(),
+    dishId
   );
 }
 
@@ -212,8 +216,10 @@ export async function getOrCreateActiveList(): Promise<string> {
     ACTIVE_LIST_ID
   );
   if (!row) {
+    // OR IGNORE: zwei quasi-gleichzeitige Erst-Inserts dürfen nicht am
+    // PRIMARY KEY kollidieren.
     await database.runAsync(
-      'INSERT INTO shopping_lists (id, created_at) VALUES (?, ?)',
+      'INSERT OR IGNORE INTO shopping_lists (id, created_at) VALUES (?, ?)',
       ACTIVE_LIST_ID,
       new Date().toISOString()
     );
@@ -247,16 +253,22 @@ export async function addDishToList(
       dish.name
     );
 
-    // Upsert source items for this dish
+    // Upsert source items for this dish. Erst pro ingredient_id aufsummieren:
+    // dieselbe Zutat kann in einem Gericht mehrfach vorkommen (z. B. in zwei
+    // Einheiten) — INSERT OR REPLACE würde sonst nur den letzten Eintrag behalten.
+    const amountsByIngredient = new Map<string, number>();
     for (const di of dish.ingredients) {
       const ing = ingredientMap.get(di.ingredient_id);
       if (!ing) continue;
       const base = normalizeToBase(di.amount, di.unit, ing);
+      amountsByIngredient.set(di.ingredient_id, (amountsByIngredient.get(di.ingredient_id) ?? 0) + base);
+    }
+    for (const [ingredientId, base] of amountsByIngredient) {
       await database.runAsync(
         'INSERT OR REPLACE INTO shopping_source_items (list_id, dish_id, ingredient_id, amount_base) VALUES (?, ?, ?, ?)',
         ACTIVE_LIST_ID,
         dish.id,
-        di.ingredient_id,
+        ingredientId,
         base
       );
     }

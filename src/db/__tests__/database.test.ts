@@ -32,6 +32,7 @@ import {
   removeDishFromList,
   clearActiveShoppingList,
   clearAllUserData,
+  markDishCooked,
 } from '../database';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -177,7 +178,7 @@ describe('getOrCreateActiveList', () => {
     const result = await getOrCreateActiveList();
     expect(result).toBe('active');
     expect(mockDb.runAsync).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO shopping_lists'),
+      expect.stringContaining('INSERT OR IGNORE INTO shopping_lists'),
       'active',
       expect.any(String)
     );
@@ -277,5 +278,39 @@ describe('clearAllUserData', () => {
     const deleted = mockDb.runAsync.mock.calls.map((c) => c[0] as string);
     expect(deleted.some((sql) => /DELETE FROM dishes\b/.test(sql))).toBe(false);
     expect(deleted.some((sql) => /DELETE FROM ingredients\b/.test(sql))).toBe(false);
+  });
+});
+
+// ── addDishToList: Duplikat-Zutaten ──────────────────────────────────────────
+
+describe('addDishToList mit doppelter Zutat', () => {
+  test('summiert mehrfach vorkommende ingredient_ids statt zu überschreiben', async () => {
+    mockDb.getFirstAsync.mockResolvedValue({ id: 'active' });
+    const dishWithDuplicate: Dish = {
+      ...sampleDish,
+      ingredients: [
+        { ingredient_id: 'ing1', amount: 2, unit: 'el' }, // 2 × 15 = 30 ml
+        { ingredient_id: 'ing1', amount: 100, unit: 'ml' }, // + 100 ml
+      ],
+    };
+    await addDishToList(dishWithDuplicate, ingMap);
+
+    const sourceInserts = mockDb.runAsync.mock.calls.filter((c) =>
+      (c[0] as string).includes('INSERT OR REPLACE INTO shopping_source_items')
+    );
+    expect(sourceInserts).toHaveLength(1);
+    // Args: listId, dishId, ingredientId, amount_base
+    expect(sourceInserts[0][4]).toBe(130);
+  });
+});
+
+// ── markDishCooked: idempotent ───────────────────────────────────────────────
+
+describe('markDishCooked', () => {
+  test('Insert ist mit NOT-EXISTS-Guard idempotent (Doppel-Tap)', async () => {
+    await markDishCooked('d1');
+    const sql = mockDb.runAsync.mock.calls[0][0] as string;
+    expect(sql).toContain('INSERT INTO cooked_history');
+    expect(sql).toContain('WHERE NOT EXISTS');
   });
 });

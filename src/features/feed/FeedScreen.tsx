@@ -27,7 +27,7 @@ import {
   getAllIngredients,
   getActiveDishIds,
 } from '../../db/database';
-import { fetchDishesFromCloud, fetchIngredientsFromCloud } from '../../db/cloud-catalog';
+import { fetchDishesFromCloud, fetchIngredientsFromCloud, hardenCloudDishes } from '../../db/cloud-catalog';
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import { filterCompatibleDishes } from '../filter/allergen-filter';
 import { rankDishes } from './scoring';
@@ -57,6 +57,7 @@ type FeedState =
   | { status: 'error'; message: string }
   | {
       status: 'ready';
+      allDishes: Dish[];
       safeDishes: Dish[];
       rankedDishes: Dish[];
       ingredients: Ingredient[];
@@ -85,24 +86,35 @@ export default function FeedScreen() {
 
       let cloudDishes: Dish[] = [];
       let cloudIngredients: Ingredient[] = [];
-      let usingOfflineData = isOffline;
       if (!isOffline) {
         try {
           [cloudDishes, cloudIngredients] = await Promise.all([
             fetchDishesFromCloud(),
             fetchIngredientsFromCloud(),
           ]);
-          if (cloudDishes.length === 0) usingOfflineData = true;
         } catch {
-          usingOfflineData = true;
+          // Fallback unten über cloudUsable
         }
       }
 
-      const dishesToSeed = cloudDishes.length > 0 ? cloudDishes : DISHES;
-      const ingredientsToSeed = cloudIngredients.length > 0 ? cloudIngredients : INGREDIENTS;
+      // Cloud-Daten nur als Ganzes übernehmen — eine Teilantwort (Gerichte ohne
+      // Zutaten oder umgekehrt) würde Cloud-Gerichte mit Bundled-Zutaten mischen.
+      const hardenedDishes =
+        cloudDishes.length > 0 && cloudIngredients.length > 0
+          ? hardenCloudDishes(cloudDishes, cloudIngredients)
+          : [];
+      const cloudUsable = hardenedDishes.length > 0;
+      const usingOfflineData = !cloudUsable;
 
-      await seedDishes(dishesToSeed);
-      await seedIngredients(ingredientsToSeed);
+      if (cloudUsable) {
+        await seedDishes(hardenedDishes);
+        await seedIngredients(cloudIngredients);
+      } else if ((await getAllDishes()).length === 0) {
+        // First-Run ohne Cloud: Bundled-Snapshot seeden. Einen bereits gefüllten
+        // (ggf. neueren) Cloud-Cache nie mit dem Bundle überschreiben.
+        await seedDishes(DISHES);
+        await seedIngredients(INGREDIENTS);
+      }
 
       const [allDishes, allIngredients, profile, activeDishIds] = await Promise.all([
         getAllDishes(),
@@ -126,6 +138,7 @@ export default function FeedScreen() {
 
       setState({
         status: 'ready',
+        allDishes,
         safeDishes,
         rankedDishes,
         ingredients: allIngredients,
@@ -154,11 +167,15 @@ export default function FeedScreen() {
     const listSet = new Set(activeDishIds);
     setState((prev) => {
       if (prev.status !== 'ready' || !profile) return prev;
-      const nextActiveIngredients = buildActiveIngredientIds(prev.safeDishes, listSet);
-      const reranked = rankDishes(prev.safeDishes, profile, prev.ingredients, nextActiveIngredients);
+      // Harten Filter (Allergene/Diät/Equipment/Zeit) mit dem frischen Profil
+      // neu anwenden — nicht nur re-ranken.
+      const safeDishes = filterCompatibleDishes(prev.allDishes, profile);
+      const nextActiveIngredients = buildActiveIngredientIds(prev.allDishes, listSet);
+      const reranked = rankDishes(safeDishes, profile, prev.ingredients, nextActiveIngredients);
       return {
         ...prev,
         profile,
+        safeDishes,
         listDishIds: listSet,
         activeIngredientIds: nextActiveIngredients,
         rankedDishes: reranked,

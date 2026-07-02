@@ -9,7 +9,6 @@ import {
   initDatabase,
   getAllDishes,
   getAllIngredients,
-  getActiveDishIds,
 } from '../../db/database';
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import DishGridCard from '../../components/DishGridCard';
@@ -46,7 +45,6 @@ export default function FavoritesScreen() {
         getAllDishes(),
         getAllIngredients(),
         loadProfile(),
-        getActiveDishIds(),
       ]);
 
       if (!profile) {

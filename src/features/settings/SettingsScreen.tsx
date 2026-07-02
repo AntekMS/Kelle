@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { SettingsStackParamList } from '../../navigation/types';
 import { loadProfile, deleteProfile } from '../../store/profile-store';
-import { clearAllUserData } from '../../db/database';
+import { clearAllUserData, getActiveShoppingList } from '../../db/database';
 import { useAppContext } from '../../navigation/AppContext';
 import { CURRENT_POLICY_VERSION } from '../../lib/policy';
 import { colors } from '../../theme/colors';
@@ -20,7 +20,10 @@ export default function SettingsScreen({ navigation }: Props) {
       Alert.alert('Keine Daten', 'Es sind keine gespeicherten Daten vorhanden.');
       return;
     }
-    const json = JSON.stringify(profile, null, 2);
+    // Art. 15/20: Export muss ALLE Nutzerdaten umfassen — auch die SQLite-
+    // Einkaufsliste, die die Löschung ebenfalls erfasst (Parität Export/Löschung).
+    const shoppingList = await getActiveShoppingList().catch(() => null);
+    const json = JSON.stringify({ profile, shopping_list: shoppingList }, null, 2);
     // Share sheet keeps the full payload intact (Alert truncates large JSON on Android)
     // and lets the user actually take their data with them (Art. 20 DSGVO).
     try {

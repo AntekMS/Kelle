@@ -17,6 +17,11 @@ Mobile Lern-App für Kocheinsteiger. Rezept-Katalog kommt aus Supabase (read-onl
 - Niemals API-Keys oder Secrets in den Code oder ins Git committen. `.env` ist gitignored.
 - **SQLite**: Niemals zwei Funktionen mit `withTransactionAsync` parallel per `Promise.all` aufrufen — SQLite erlaubt nur eine Transaktion gleichzeitig pro Connection. Stattdessen sequenziell awaiten.
 - Einheiten-Konversion (`amount` → `base_unit`) läuft IMMER über `normalizeToBase` aus `src/lib/units.ts` — NIE inline duplizieren (Scoring und Einkaufsliste müssen identisch normalisieren).
+- **Cybersecurity IMMER mitdenken** — bei jeder Änderung Sicherheitsauswirkungen prüfen:
+  - Externe Daten (Supabase/Cloud) NIE ungeprüft übernehmen — strukturell validieren, fail-safe: im Zweifel Gericht verwerfen (siehe `cloud-catalog.ts`: `isValidCloudDish`/`isValidCloudIngredient`/`hardenCloudDishes`).
+  - SQL nur parameterisiert (`?`-Bindings) — nie String-Interpolation ins Statement.
+  - Keine Secrets in Code, Git oder App-`.env`; neue Abhängigkeiten und jeden neuen Netzwerkzugriff kritisch hinterfragen.
+  - Art.-9-Daten bleiben lokal (siehe oben); fail-open-Pfade im Allergenfilter sind Sicherheitsbugs.
 
 ## Architektur
 
@@ -34,11 +39,18 @@ src/
                     #   normalizeToBase (re-exportiert aus lib/units — auch von Tests genutzt)
                     #   addDishToList/removeDishFromList/clearActiveShoppingList/clearAllUserData
                     #     kapseln ihre Schreibvorgänge in withTransactionAsync (atomar)
+                    #   addDishToList summiert doppelte ingredient_ids pro Gericht (kein REPLACE-Verlust)
+                    #   markDishCooked ist idempotent (NOT-EXISTS-Guard gegen Doppel-Tap)
                     #   _resetDbForTests (nur für Tests — setzt SQLite-Singleton zurück)
     __tests__/
-      database.test.ts  # 25 Tests: normalizeToBase, getAllDishes, Transaktionen, clearAllUserData etc.
+      database.test.ts  # 27 Tests: normalizeToBase, getAllDishes, Transaktionen, clearAllUserData etc.
+      cloud-catalog.test.ts # 12 Tests: Cloud-Validierung + hardenCloudDishes (Allergen-Union)
     cloud-catalog.ts # Supabase fetch: fetchDishesFromCloud(), fetchIngredientsFromCloud()
                      #   wirft wenn supabase==null → FeedScreen fällt auf Bundled-Daten zurück
+                     #   SECURITY: validiert jede Row strukturell (isValidCloudDish/-Ingredient),
+                     #   malformte Rows werden verworfen (fail-safe). hardenCloudDishes vereinigt
+                     #   dish.allergens mit den Zutaten-Allergenen und verwirft Gerichte mit
+                     #   unbekannten Zutaten — Cloud-Daten können den Allergenfilter nicht unterlaufen
   lib/
     supabase.ts     # Supabase-Client (EXPO_PUBLIC_ env vars) — NULL wenn env fehlt (Offline-Fallback statt Crash)
     units.ts        # normalizeToBase(amount, unit, ing) — EINZIGE Quelle der Einheiten-Konversion
@@ -75,8 +87,12 @@ src/
                       # Suchfeld (TextInput über Liste) → client-seitiger Name-Filter auf rankedDishes
                       # Header-Banner bei nicht-leerer Liste → cross-tab zu ShoppingTab (getParent)
                       # Offline: NetInfo.fetch() (echter Netzstatus) ODER Cloud-Fetch fehlschlägt/leer → usingOfflineData
+                      # Cloud-Daten nur als Ganzes (Dishes UND Ingredients non-empty, nach Härtung):
+                      #   Teilantworten → Offline-Fallback. Bundled-Seed NUR bei leerem Cache
+                      #   (First-Run) — nie einen gefüllten Cloud-Cache mit dem Bundle überschreiben
                       # Pull-to-Refresh via RefreshControl (silent=true → kein Loading-Spinner)
-                      # useFocusEffect → refreshOnFocus(): Profil + Liste neu laden + neu ranken
+                      # useFocusEffect → refreshOnFocus(): Profil + Liste neu laden, harten Filter
+                      #   (filterCompatibleDishes auf allDishes im State) NEU anwenden + neu ranken
                       #   (übernimmt in DishDetail markierte gekocht/Favorit/Listen-Änderungen)
                       # WICHTIG: seedDishes + seedIngredients sequenziell awaiten (nicht Promise.all)
       feed-sections.ts # partitionByCooked(dishes, cookedIds) → { forYou, cooked } (UI-Aufteilung, Reihenfolge erhalten)
@@ -103,6 +119,8 @@ src/
       DishDetailScreen.tsx    # Rezept-Screen (Param dishId): Hero, Herz-Favorit (neben Name), Nährwerte,
                               # Zutaten (Originalmengen), nummerierte Schritte,
                               # "+ Zur Einkaufsliste"-Toggle + "Als gekocht markieren" (#33, lädt Profil)
+                              # Profil-Mutationen über updateProfile (profileRef + serialisierte
+                              #   saveProfile-Queue) — Herz + „gekocht" können sich nicht überschreiben
                               # in FeedStack, FavStack und ShoppingStack registriert
     profil/
       ProfilScreen.tsx        # Read-only Profil (FeedStack-Route 'Profil', via Header-Button im Feed):
@@ -110,6 +128,7 @@ src/
                               #   (antippbar → DishDetail), Link → Settings (navigate im FeedStack, Back-Stack bleibt — #30). Labels aus lib/labels.
     settings/
       SettingsScreen.tsx      # DSGVO-Betroffenenrechte (Export via Share, Löschen) + Links zu Datenschutz/Impressum
+                              # Export umfasst Profil + SQLite-Einkaufsliste (Parität zur Löschung, Art. 15/20)
                               # Löschen → deleteProfile() + clearAllUserData() (SecureStore + SQLite)
     legal/
       DatenschutzScreen.tsx   # Statische Datenschutzerklärung (Art. 13 DSGVO) — Kontaktdaten noch Platzhalter
@@ -256,7 +275,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | Supabase-Seed (Gerichte/Zutaten) | ✅ done — 15 Gerichte + 33 Zutaten in Supabase |
 | Brand-Design (Farben, Font, Bilder) | ✅ done — Kelle-Palette, Spectral-Font, 15 Hero-Fotos |
 | Icon-System (PNG statt Emoji) | ✅ done — 15 PNGs in assets/icons/; settings → Platzhalter (icon_technique) |
-| Test-Suite | ✅ 114 Tests grün (scoring, profile-store, database, allergen-filter, units, equipment, labels, feed-sections) |
+| Test-Suite | ✅ 128 Tests grün (scoring, profile-store, database, cloud-catalog, allergen-filter, units, equipment, labels, feed-sections) |
 | Favoriten-State-Bug fix (Issue #11) | ✅ done — useFocusEffect reload bei Tab-Fokus |
 | Einkaufsliste-Sync Feed↔Favoriten (Issue #6) | ✅ done — refreshListState via useFocusEffect im Feed |
 | Offline-Banner + Pull-to-Refresh (Issues #18, #21) | ✅ done — usingOfflineData + RefreshControl |
@@ -277,6 +296,7 @@ overlapBonus: [0..0.12] Anteil Zutaten bereits in aktiver Einkaufsliste
 | DishDetail: "Als gekocht markieren" + Herz (Issue #33) | ✅ done — lädt Profil, markDishCooked/saveProfile; Favorit-Toggle |
 | Catchy Empty-States (Issue #34) | ✅ done — Icon + Text auf Feed/Favoriten/Einkauf |
 | Offline-Erkennung via NetInfo (Issue #18) | ✅ done — NetInfo.fetch() im Feed; Geräte-Verifikation über Mobilfunk noch offen |
+| Security-/Bug-Review-Fixes (02.07.2026) | ✅ done — Cloud-Daten-Validierung + Allergen-Härtung (fail-safe), Cloud/Bundled-Seeding konsistent, harter Filter bei Fokus neu, DishDetail-Profil-Races (Ref + Save-Queue), markDishCooked idempotent, Duplikat-Zutaten summiert, DSGVO-Export inkl. Einkaufsliste, GitHub-PAT aus .env entfernt |
 | App-Store-Identität + EAS (Issue #16) | 🟡 teilw. — bundleId/package/Splash in app.json + eas.json angelegt; Developer-Accounts + Store-Metadaten offen |
 | Rechtliche Angaben (Issue #15) | 🟡 teilw. — "EU-Hosting"-Falschaussage korrigiert; Kontaktdaten-Platzhalter offen (Nutzer-Daten nötig) |
 
@@ -297,6 +317,8 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 
 ## Noch offen
 
+- **GitHub-PAT rotieren (Nutzer-Aktion)**: Ein GitHub Personal Access Token lag bis 02.07.2026 im Klartext in `.env` (nicht in Git-Historie, aber auf Platte). Zeile ist entfernt — das Token muss auf github.com widerrufen/rotiert werden (Settings → Developer settings → Personal access tokens) und darf nur noch außerhalb des Repos liegen (z. B. `gh auth login`).
+- **`el`/`tl`-Fallback in `normalizeToBase`** (`lib/units.ts`): Fehlt die Konversion in `unit_conversions`, wird Faktor 1 angenommen → „2 EL Öl" = 2 g. Datenqualitäts-Falle: bei neuen Zutaten immer `el`/`tl`/`stueck`-Konversionen pflegen.
 - **icon_settings.png**: Fehlt noch in `assets/icons/` — aktuell Platzhalter `icon_technique.png`. Monochromes Gear-Icon (512×512 PNG) ablegen und `icon-images.ts` `settings`-Key anpassen.
 - **icon_cart.png**: Fehlt noch in `assets/icons/` — Einkauf-Tab nutzt Platzhalter `icon_check.png`. Monochromes Warenkorb-Icon (512×512 PNG) ablegen und `icon-images.ts` `shopping`-Key anpassen.
 - **Geräte-Icons** (Issue #9): `icon_puerierstab.png`, `icon_toaster.png`, `icon_sandwichmaker.png`, `icon_reiskocher.png` fehlen — aktuell alle Platzhalter `icon_technique.png`. Monochrome 512×512 PNGs ablegen und die jeweiligen `iconKey`-Mappings in `icon-images.ts` anpassen.
@@ -314,7 +336,7 @@ Icons nutzen `tintColor` — monochromatische PNGs liefern, Farbe wird per Style
 ```bash
 npx expo start          # Dev-Server
 npx expo start --ios    # iOS-Simulator
-npx jest                # Tests (114 grün)
+npx jest                # Tests (128 grün)
 npx tsc --noEmit        # Typcheck (0 Fehler)
 ```
 
