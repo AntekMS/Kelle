@@ -9,6 +9,9 @@ import {
   initDatabase,
   getAllDishes,
   getAllIngredients,
+  getActiveDishIds,
+  addDishToList,
+  removeDishFromList,
 } from '../../db/database';
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import DishGridCard from '../../components/DishGridCard';
@@ -30,6 +33,7 @@ type FavState =
       dishes: Dish[];
       profile: UserProfile;
       ingredientMap: Map<string, Ingredient>;
+      listDishIds: Set<string>;
     };
 
 export default function FavoritesScreen() {
@@ -41,10 +45,11 @@ export default function FavoritesScreen() {
     setState({ status: 'loading' });
     try {
       await initDatabase();
-      const [allDishes, allIngredients, profile] = await Promise.all([
+      const [allDishes, allIngredients, profile, activeDishIds] = await Promise.all([
         getAllDishes(),
         getAllIngredients(),
         loadProfile(),
+        getActiveDishIds(),
       ]);
 
       if (!profile) {
@@ -57,6 +62,7 @@ export default function FavoritesScreen() {
         dishes: allDishes.filter((d) => profile.favorites.includes(d.id)),
         profile,
         ingredientMap: new Map(allIngredients.map((i) => [i.id, i])),
+        listDishIds: new Set(activeDishIds),
       });
     } catch (err) {
       setState({ status: 'error', message: err instanceof Error ? err.message : 'Unbekannter Fehler.' });
@@ -85,6 +91,22 @@ export default function FavoritesScreen() {
     });
   }
 
+  async function handleToggleShoppingList(dishId: string) {
+    if (state.status !== 'ready') return;
+    const { dishes, ingredientMap, listDishIds } = state;
+    const dish = dishes.find((d) => d.id === dishId);
+    if (!dish) return;
+
+    const inList = listDishIds.has(dishId);
+    if (inList) await removeDishFromList(dishId, ingredientMap);
+    else await addDishToList(dish, ingredientMap);
+
+    const nextListIds = new Set(listDishIds);
+    if (inList) nextListIds.delete(dishId);
+    else nextListIds.add(dishId);
+    setState({ ...state, listDishIds: nextListIds });
+  }
+
   if (state.status === 'loading') {
     return (
       <View style={styles.center}>
@@ -104,7 +126,7 @@ export default function FavoritesScreen() {
     );
   }
 
-  const { dishes, profile, ingredientMap } = state;
+  const { dishes, profile, ingredientMap, listDishIds } = state;
 
   return (
     <FlatList<Dish[]>
@@ -120,6 +142,8 @@ export default function FavoritesScreen() {
             onToggleFavorite={handleToggleFavorite}
             onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
             ingredientMap={ingredientMap}
+            isInList={listDishIds.has(pair[0].id)}
+            onToggleList={handleToggleShoppingList}
           />
           {pair[1] ? (
             <DishGridCard
@@ -129,6 +153,8 @@ export default function FavoritesScreen() {
               onToggleFavorite={handleToggleFavorite}
               onPress={(dishId) => navigation.navigate('DishDetail', { dishId })}
               ingredientMap={ingredientMap}
+              isInList={listDishIds.has(pair[1].id)}
+              onToggleList={handleToggleShoppingList}
             />
           ) : (
             <View style={styles.gridSpacer} />

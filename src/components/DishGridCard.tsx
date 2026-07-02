@@ -13,12 +13,15 @@ interface DishGridCardProps {
   onToggleFavorite: (dishId: string) => void;
   onPress: (dishId: string) => void;
   ingredientMap?: Map<string, Ingredient>;
+  isInList?: boolean;
+  onToggleList?: (dishId: string) => void;
 }
 
 /**
  * Kompakte Gerichtekarte für das 2-Spalten-Grid im Feed/Favoriten.
  * Bewusst minimal: Bild + Herz-Overlay + Name + eine Meta-Zeile (Zeit · kcal).
- * Aktionen (Liste/Gekocht) liegen auf der Detailseite.
+ * Schnell-Aktionen on-card: Herz (Favorit) + Plus/Haken (Einkaufsliste, #41);
+ * "Gekocht" liegt weiter auf der Detailseite.
  */
 export default function DishGridCard({
   dish,
@@ -27,6 +30,8 @@ export default function DishGridCard({
   onToggleFavorite,
   onPress,
   ingredientMap,
+  isInList = false,
+  onToggleList,
 }: DishGridCardProps) {
   const imageSource = DISH_IMAGES[dish.image_asset];
   const nutrition = ingredientMap ? computeNutritionPerServing(dish, ingredientMap) : null;
@@ -67,6 +72,28 @@ export default function DishGridCard({
             resizeMode="contain"
           />
         </PressableScale>
+
+        {onToggleList && (
+          <PressableScale
+            style={[styles.listButton, isInList && styles.listButtonActive]}
+            activeScale={0.8}
+            hitSlop={8}
+            onPress={() => onToggleList(dish.id)}
+            accessibilityLabel={
+              isInList
+                ? `${dish.name} von der Einkaufsliste entfernen`
+                : `${dish.name} zur Einkaufsliste hinzufügen`
+            }
+            accessibilityRole="togglebutton"
+            accessibilityState={{ selected: isInList }}
+          >
+            {isInList ? (
+              <Image source={ICON_IMAGES.check} style={styles.listIconCheck} resizeMode="contain" />
+            ) : (
+              <Text style={styles.listIconPlus}>+</Text>
+            )}
+          </PressableScale>
+        )}
       </View>
 
       <View style={styles.content}>
@@ -115,6 +142,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heartIcon: { width: 18, height: 18, tintColor: colors.primary },
+  listButton: {
+    position: 'absolute',
+    top: 48,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listButtonActive: { backgroundColor: colors.secondary },
+  listIconPlus: { fontSize: 22, lineHeight: 24, color: colors.primary, fontWeight: '400' },
+  listIconCheck: { width: 16, height: 16, tintColor: colors.surface },
   cookedBadge: {
     position: 'absolute',
     top: 8,
