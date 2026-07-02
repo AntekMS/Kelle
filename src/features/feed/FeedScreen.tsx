@@ -31,7 +31,7 @@ import { fetchDishesFromCloud, fetchIngredientsFromCloud, hardenCloudDishes } fr
 import { loadProfile, saveProfile } from '../../store/profile-store';
 import { filterCompatibleDishes } from '../filter/allergen-filter';
 import { rankDishes } from './scoring';
-import { partitionByCooked } from './feed-sections';
+import { partitionByCooked, stabilizeRanking } from './feed-sections';
 import DishGridCard from '../../components/DishGridCard';
 import FeaturedDishCard from '../../components/FeaturedDishCard';
 import ICON_IMAGES from '../../components/icon-images';
@@ -160,15 +160,18 @@ export default function FeedScreen() {
     loadFeed();
   }, [loadFeed]);
 
-  // Beim Zurückkehren (z. B. aus DishDetail) Profil + Einkaufsliste neu laden und neu ranken,
+  // Beim Zurückkehren (z. B. aus DishDetail) Profil + Einkaufsliste neu laden,
   // damit dort markierte "gekocht"/Favoriten/Listen-Änderungen im Feed erscheinen.
+  // Die Reihenfolge bleibt dabei stabil (#44) — neu sortiert wird nur bei
+  // loadFeed()/Pull-to-Refresh.
   const refreshOnFocus = useCallback(async () => {
     const [profile, activeDishIds] = await Promise.all([loadProfile(), getActiveDishIds()]);
     const listSet = new Set(activeDishIds);
     setState((prev) => {
       if (prev.status !== 'ready' || !profile) return prev;
       // Harten Filter (Allergene/Diät/Equipment/Zeit) mit dem frischen Profil
-      // neu anwenden — nicht nur re-ranken.
+      // IMMER neu anwenden — Stabilität gilt nur für die Sortierung, nie für
+      // das Herausfiltern.
       const safeDishes = filterCompatibleDishes(prev.allDishes, profile);
       const nextActiveIngredients = buildActiveIngredientIds(prev.allDishes, listSet);
       const reranked = rankDishes(safeDishes, profile, prev.ingredients, nextActiveIngredients);
@@ -178,7 +181,7 @@ export default function FeedScreen() {
         safeDishes,
         listDishIds: listSet,
         activeIngredientIds: nextActiveIngredients,
-        rankedDishes: reranked,
+        rankedDishes: stabilizeRanking(prev.rankedDishes, reranked),
       };
     });
   }, []);
@@ -200,7 +203,7 @@ export default function FeedScreen() {
 
   async function handleToggleFavorite(dishId: string) {
     if (state.status !== 'ready') return;
-    const { safeDishes, ingredients, profile, activeIngredientIds } = state;
+    const { profile } = state;
 
     const isFav = profile.favorites.includes(dishId);
     const favorites = isFav
@@ -209,8 +212,9 @@ export default function FeedScreen() {
     const updated: UserProfile = { ...profile, favorites, updated_at: new Date().toISOString() };
     await saveProfile(updated);
 
-    const rankedDishes = rankDishes(safeDishes, updated, ingredients, activeIngredientIds);
-    setState({ ...state, rankedDishes, profile: updated });
+    // Kein Re-Ranking hier (#44): der favBonus würde das Gericht sofort
+    // hochspringen lassen. Neue Reihenfolge erst bei Pull-to-Refresh.
+    setState({ ...state, profile: updated });
   }
 
   // Hooks müssen vor den frühen Returns laufen (Rules of Hooks) — daher hier oben,
